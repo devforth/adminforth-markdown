@@ -1,6 +1,6 @@
 {
   "name": "@adminforth/markdown",
-  "version": "1.0.21",
+  "version": "1.0.0",
   "description": "Markdown plugin for adminforth",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,7 @@
     "markdown"
   ],
   "author": "devforth",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.7",
     "semantic-release": "^24.2.1",
