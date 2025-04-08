@@ -22,6 +22,7 @@
   </script>
   
   <style lang="scss">
+  
     .mdwn h1 {
       @apply text-2xl font-bold mt-2 mb-2;
     }
