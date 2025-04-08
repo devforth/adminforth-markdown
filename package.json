@@ -9,6 +9,9 @@
     "build": "tsc",
     "prepare": "npm link adminforth"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/devforth/adminforth-markdown.git"
