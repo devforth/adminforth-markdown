@@ -5,16 +5,13 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+
   "scripts": {
     "build": "tsc && rsync -av --exclude 'node_modules' custom dist/",
     "prepare": "npm link adminforth"
   },
   "publishConfig": {
     "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/devforth/adminforth-markdown.git"
   },
   "keywords": [
     "adminforth",
@@ -27,6 +24,13 @@
     "semantic-release": "^24.2.1",
     "semantic-release-slack-bot": "^4.0.2",
     "typescript": "^5.7.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devforth/adminforth-markdown.git"
+  },
+  "dependencies": {
+    "adminforth": "latest"
   },
   "release": {
     "plugins": [
