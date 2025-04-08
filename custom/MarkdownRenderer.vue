@@ -15,14 +15,14 @@
     const html = marked(String(props.record[props.column.name]));
     if (html instanceof Promise) {
       console.error("Async rendering is not supported in this setup.");
-      return '-';
+      return '';
     }
     return DOMPurify.sanitize(html);
   });
   </script>
   
   <style lang="scss">
-  
+
     .mdwn h1 {
       @apply text-2xl font-bold mt-2 mb-2;
     }
