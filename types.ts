@@ -1,4 +1,4 @@
 
 export interface PluginOptions {
-  fieldName: string[];
+  fieldName: string;
 }
