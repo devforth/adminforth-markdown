@@ -9,15 +9,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { callAdminForthApi } from '@/utils';
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core';
-import { gfm } from '@milkdown/kit/preset/gfm';
-import { commonmark } from '@milkdown/preset-commonmark';
-import { listener, listenerCtx } from '@milkdown/plugin-listener';
+import { Editor } from '@milkdown/core';
 import { Crepe } from '@milkdown/crepe';
-import { insert } from '@milkdown/kit/utils';
-import { AdminForthColumnCommon } from '@/types/Common';
+import type { AdminForthColumn } from '@/types/Common';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame-dark.css';
 
