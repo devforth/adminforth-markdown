@@ -1,4 +1,4 @@
-import { AdminForthPlugin, AdminForthResource, IAdminForth, Filters, AdminUser} from "adminforth";
+import { AdminForthPlugin, AdminForthResource, IHttpServer, IAdminForth, RateLimiter, Filters, AdminUser } from "adminforth";
 import { PluginOptions } from "./types.js";
 
 export default class MarkdownPlugin extends AdminForthPlugin {
@@ -28,6 +28,14 @@ export default class MarkdownPlugin extends AdminForthPlugin {
     if (!validDataTypes.includes(column.type)) {
       throw new Error(`Column ${this.options.fieldName} must be of type 'string', 'text' or 'richtext'.`);
     }
+    if (this.options.completion?.adapter) {
+      this.options.completion?.adapter.validate();
+    }
+    // optional method where you can safely check field types after database discovery was performed
+    if (this.options.completion && !this.options.completion.adapter) {
+      throw new Error(`Completion adapter is required`);
+    }
+    
   }
 
   async modifyResourceConfig(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
@@ -90,6 +98,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
+        shouldComplete: !!this.options.completion,
         pluginType: 'crepe',
         uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
       },
@@ -100,6 +109,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
+        shouldComplete: !!this.options.completion,
         pluginType: 'crepe',
         uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
       },
@@ -234,5 +244,118 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         }
       );
     }
+  }
+  generateRecordContext(record: any, maxFields: number, inputFieldLimit: number, partsCount: number): string {
+    // stringify each field
+    let fields: [string, string][] = Object.entries(record).map(([key, value]) => {
+      return [key, JSON.stringify(value)];
+    });
+
+    // sort fields by length, higher first
+    fields = fields.sort((a, b) => b[1].length - a[1].length);
+
+    // select longest maxFields fields
+    fields = fields.slice(0, maxFields);
+
+    const minLimit = '...'.length * partsCount;
+
+    if (inputFieldLimit < minLimit) {
+      throw new Error(`inputFieldLimit should be at least ${minLimit}`);
+    }
+
+    // for each field, if it is longer than inputFieldLimit, truncate it using next way:
+    // split into 5 parts, divide inputFieldLimit by 5, crop each part to this length, join parts using '...'
+    fields = fields.map(([key, value]) => {
+      if (value.length > inputFieldLimit) {
+        const partLength = Math.floor(inputFieldLimit / partsCount) - '...'.length;
+        const parts: string[] = [];
+        for (let i = 0; i < partsCount; i++) {
+          parts.push(value.slice(i * partLength, (i + 1) * partLength));
+        }
+        value = parts.join('...');
+        return [key, value];
+      }
+      return [key, value];
+    });
+
+    return JSON.stringify(Object.fromEntries(fields));
+  }
+
+  setupEndpoints(server: IHttpServer) {
+    console.log('-----😀😀😀😀----------------------------- Setup endpoints for plugin', this.pluginInstanceId);
+    server.endpoint({
+      method: 'POST',
+      path: `/plugin/${this.pluginInstanceId}/doComplete`,
+      handler: async ({ body, headers }) => {
+        console.log('-----😀😀😀😀----------------------------- Do complete for plugin', this.pluginInstanceId);
+        const { record } = body;
+
+        if (this.options.completion.rateLimit?.limit) {
+          // rate limit
+          const { error } = RateLimiter.checkRateLimit(
+            this.pluginInstanceId, 
+            this.options.completion.rateLimit?.limit,
+            this.adminforth.auth.getClientIp(headers),
+          );
+          if (error) {
+            return {
+              completion: [],
+            }
+          }
+        }
+        const recordNoField = {...record};
+        delete recordNoField[this.options.fieldName];
+        let currentVal = record[this.options.fieldName] as string;
+        const promptLimit = this.options.completion.expert?.promptInputLimit || 500;
+        const inputContext = this.generateRecordContext(
+          recordNoField,
+          this.options.completion.expert?.recordContext?.maxFields || 5, 
+          this.options.completion.expert?.recordContext?.maxFieldLength || 300,
+          this.options.completion.expert?.recordContext?.splitParts || 5,
+        );
+
+        if (currentVal && currentVal.length > promptLimit) {
+          currentVal = currentVal.slice(-promptLimit);
+        }
+
+        const resLabel = this.resourceConfig!.label;
+       
+        let content;
+        
+        if (currentVal) {
+          content = `Continue writing for text/string field "${this.options.fieldName}" in the table "${resLabel}"\n` +
+              (Object.keys(recordNoField).length > 0 ? `Record has values for the context: ${inputContext}\n` : '') +
+              `Current field value: ${currentVal}\n` +
+              "Don't talk to me. Just write text. No quotes. Don't repeat current field value, just write completion\n";
+
+        } else {
+          content = `Fill text/string field "${this.options.fieldName}" in the table "${resLabel}"\n` +
+              (Object.keys(recordNoField).length > 0 ? `Record has values for the context: ${inputContext}\n` : '') +
+              "Be short, clear and precise. No quotes. Don't talk to me. Just write text\n";
+        }
+
+        process.env.HEAVY_DEBUG && console.log('🪲 OpenAI Prompt 🧠', content);
+        const { content: respContent, finishReason } = await this.options.completion.adapter.complete(content, this.options.completion?.expert?.stop, this.options.completion?.expert?.maxTokens);
+        const stop = this.options.completion.expert?.stop || ['.'];
+        let suggestion = respContent + (
+          finishReason === 'stop' ? (
+            stop[0] === '.' && stop.length === 1 ? '. ' : ''
+          ) : ''
+        );
+
+        if (suggestion.startsWith(currentVal)) {
+          suggestion = suggestion.slice(currentVal.length);
+        }
+        const wordsList = suggestion.split(' ').map((w, i) => {
+          return (i === suggestion.split(' ').length - 1) ? w : w + ' ';
+        });
+        console.log('🪲 OpenAI Suggestion 🧠', wordsList);
+        // remove quotes from start and end
+        return {
+          completion: wordsList
+        };
+      }
+    });
+
   }
 }

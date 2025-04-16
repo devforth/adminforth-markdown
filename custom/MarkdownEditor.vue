@@ -1,11 +1,18 @@
 <template>
   <div class="mb-2"></div>
-    <div ref="editorContainer" id="editor" :class="[
-    'text-sm rounded-lg block w-full transition-all box-border',
-    isFocused
-      ? 'ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-      : 'bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white',
-  ]"></div>
+  <div 
+    ref="editorContainer" 
+    id="editor" 
+    :class="[
+      'text-sm rounded-lg block w-full transition-all box-border relative',
+      isFocused
+        ? 'ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
+        : 'bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white',
+    ]"
+    @keydown.tab.prevent.stop="approveCompletion('all')"
+    @keydown.ctrl.right.prevent.stop="approveCompletion('word')"
+    @keydown.ctrl.down.prevent.stop="startCompletion()"
+  ></div>
 </template>
 
 <script setup lang="ts">
@@ -26,6 +33,8 @@ const props = defineProps<{
 const emit = defineEmits(['update:value']);
 const editorContainer = ref<HTMLElement | null>(null);
 const content = ref(props.record[props.column.name] || '');
+const completion = ref<string[] | null>(null);
+let tmt: null | ReturnType<typeof setTimeout> = null;
 
 const isFocused = ref(false);
 
@@ -74,6 +83,7 @@ onMounted(async () => {
           let markdownContent = crepeInstance.getMarkdown(); 
           markdownContent = await replaceBlobsWithS3Urls(markdownContent);
           emit('update:value', markdownContent);
+          startCompletion();
         });
 
         listener.focus(() => {
@@ -107,7 +117,7 @@ async function replaceBlobsWithS3Urls(markdownContent: string): Promise<string> 
     }
   }
   if (base64Images) {
-  for (let base64Image of base64Images) {
+    for (let base64Image of base64Images) {
       const file = await fetch(base64Image).then(res => res.blob()).then(blob => new File([blob], 'image.jpg', { type: blob.type }));
       if (file) {
         const s3Url = await uploadFileToS3(file);
@@ -131,6 +141,7 @@ async function getFileFromBlobUrl(blobUrl: string): Promise<File | null> {
     return null;
   }
 }
+
 async function uploadFileToS3(file: File) {
   if (!file || !file.name) {
     console.error('File or file name is undefined');
@@ -178,10 +189,75 @@ async function uploadFileToS3(file: File) {
     };
   });
 }
+async function complete(textBeforeCursor: string) {
+  try {
+    const response = await callAdminForthApi({
+        path: `/plugin/${props.meta.pluginInstanceId}/doComplete`,
+        method: 'POST',
+        body: {
+          record: {...props.record, [props.column.name]: textBeforeCursor},
+        },
+    });
+    
+    return response.completion;
+  } catch (error) {
+    console.error('Error fetching completion:', error);
+    return null;
+  }
+}
+
+async function startCompletion() {
+  if (!props.meta.shouldComplete || props.column?.editReadonly) {
+    return;
+  }
+  completion.value = null;
+  if (tmt) {
+    clearTimeout(tmt);
+  }
+  tmt = setTimeout(async () => {
+    const currentTmt = tmt;
+    const currentMarkdown = crepeInstance?.getMarkdown() || '';
+    
+    if (currentMarkdown.length < 2) {
+      return;
+    }
+
+    const completionAnswer = await complete(currentMarkdown);
+    if (currentTmt !== tmt) {
+      // while we were waiting for completion, new completion was started
+      return;
+    }
+
+    if (completionAnswer) {
+      completion.value = completionAnswer;
+    }
+  }, props.meta.debounceTime || 300);
+}
+
+function approveCompletion(type: 'all' | 'word') {
+  console.log('approveCompletion', type);
+  if (completion.value === null) {
+    console.log('completion.value is null');
+    return;
+  }
+
+  if (type === 'all') {
+    // TODO: Implement all completion
+  } else {
+    // TODO: Implement word completion
+  }
+}
+
+async function initializeCrepeEditor() {
+  
+}
 
 onBeforeUnmount(() => {
   milkdownInstance?.destroy();
   crepeInstance?.destroy();
+  if (tmt) {
+    clearTimeout(tmt);
+  }
   console.log('Editor destroyed');
 });
 </script>
