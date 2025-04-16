@@ -5,7 +5,6 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-
   "scripts": {
     "build": "tsc && rsync -av --exclude 'node_modules' custom dist/",
     "prepare": "npm link adminforth"

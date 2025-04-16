@@ -9,18 +9,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
-
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core';
-import { gfm } from '@milkdown/kit/preset/gfm';
-import { commonmark } from '@milkdown/preset-commonmark';
-import { listener, listenerCtx } from '@milkdown/plugin-listener';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { callAdminForthApi } from '@/utils';
+import { Editor } from '@milkdown/core';
 import { Crepe } from '@milkdown/crepe';
-
+import type { AdminForthColumn } from '@/types/Common';
 import '@milkdown/crepe/theme/common/style.css';
 import '@milkdown/crepe/theme/frame-dark.css';
 
-const props = defineProps<{ column: any; record: any }>();
+const props = defineProps<{
+  column: AdminForthColumn,
+  record: any,
+  meta: any,
+}>()
+
 const emit = defineEmits(['update:value']);
 const editorContainer = ref<HTMLElement | null>(null);
 const content = ref(props.record[props.column.name] || '');
@@ -63,31 +65,119 @@ onMounted(async () => {
     // Crepe
     if (props.column.components.edit.meta.pluginType === 'crepe' || props.column.components.create.meta.pluginType === 'crepe') {
       crepeInstance = await new Crepe({
-      root: editorContainer.value,  
-      defaultValue: content.value,
-    });
-
-    crepeInstance.on((listener) => {
-      listener.markdownUpdated(() => {
-        const markdownContent = crepeInstance.getMarkdown();
-        emit('update:value', markdownContent);
+        root: editorContainer.value,
+        defaultValue: content.value,
       });
 
-    listener.focus(() => {
-      isFocused.value = true;
-    });
-    listener.blur(() => {
-      isFocused.value = false;
-    });
-  });
+      crepeInstance.on((listener) => {
+        listener.markdownUpdated(async () => {
+          let markdownContent = crepeInstance.getMarkdown(); 
+          markdownContent = await replaceBlobsWithS3Urls(markdownContent);
+          emit('update:value', markdownContent);
+        });
 
-await crepeInstance.create();
-console.log('Crepe editor created');
+        listener.focus(() => {
+          isFocused.value = true;
+        });
+        listener.blur(() => {
+          isFocused.value = false;
+        });
+      });
+
+      await crepeInstance.create();
+      console.log('Crepe editor created');
     }
   } catch (error) {
     console.error('Failed to initialize editor:', error);
   }
 });
+
+async function replaceBlobsWithS3Urls(markdownContent: string): Promise<string> {
+  const blobUrls = markdownContent.match(/blob:[^\s)]+/g);
+  const base64Images = markdownContent.match(/data:image\/[^;]+;base64,[^\s)]+/g);
+  if (blobUrls) {
+    for (let blobUrl of blobUrls) {
+      const file = await getFileFromBlobUrl(blobUrl);
+      if (file) {
+        const s3Url = await uploadFileToS3(file);
+        if (s3Url) {
+          markdownContent = markdownContent.replace(blobUrl, s3Url);
+        }
+      }
+    }
+  }
+  if (base64Images) {
+  for (let base64Image of base64Images) {
+      const file = await fetch(base64Image).then(res => res.blob()).then(blob => new File([blob], 'image.jpg', { type: blob.type }));
+      if (file) {
+        const s3Url = await uploadFileToS3(file);
+        if (s3Url) {
+          markdownContent = markdownContent.replace(base64Image, s3Url);
+        }
+      }
+    }
+  }
+  return markdownContent;
+}
+
+async function getFileFromBlobUrl(blobUrl: string): Promise<File | null> {
+  try {
+    const response = await fetch(blobUrl);
+    const blob = await response.blob();
+    const file = new File([blob], 'uploaded-image.jpg', { type: blob.type });
+    return file;
+  } catch (error) {
+    console.error('Failed to get file from blob URL:', error);
+    return null;
+  }
+}
+async function uploadFileToS3(file: File) {
+  if (!file || !file.name) {
+    console.error('File or file name is undefined');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('image', file);
+  const originalFilename = file.name.split('.').slice(0, -1).join('.');
+  const originalExtension = file.name.split('.').pop();
+
+  const { uploadUrl, tagline, previewUrl, s3Path, error } = await callAdminForthApi({
+    path: `/plugin/${props.meta.uploadPluginInstanceId}/get_s3_upload_url`,
+    method: 'POST',
+    body: {
+      originalFilename,
+      contentType: file.type,
+      size: file.size,
+      originalExtension,
+    },
+  });
+
+  if (error) {
+    console.error('Upload failed:', error);
+    return;
+  }
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('PUT', uploadUrl, true);
+  xhr.setRequestHeader('Content-Type', file.type);
+  xhr.setRequestHeader('x-amz-tagging', tagline);
+  xhr.send(file);
+
+  return new Promise((resolve, reject) => {
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        resolve(previewUrl);
+      } else {
+        reject('Error uploading to S3');
+      }
+    };
+
+    xhr.onerror = () => {
+      reject('Error uploading to S3');
+    };
+  });
+}
 
 onBeforeUnmount(() => {
   milkdownInstance?.destroy();
