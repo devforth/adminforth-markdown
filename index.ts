@@ -39,7 +39,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
     if (!column) {
       throw new Error(`Column ${fieldName} not found in resource ${resourceConfig.label}`);
     }
-
     if (!column.components) {
       column.components = {};
     }
