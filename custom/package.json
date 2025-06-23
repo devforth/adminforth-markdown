@@ -9,9 +9,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "vue-suggestion-input": "^0.0.18"
-  },
   "dependencies": {
     "@milkdown/kit": "^7.8.0",
     "@milkdown/theme-nord": "^7.8.0",
