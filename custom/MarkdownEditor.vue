@@ -143,7 +143,7 @@ async function uploadFileToS3(file: File) {
   const originalExtension = file.name.split('.').pop();
 
   const { uploadUrl, tagline, previewUrl, s3Path, error } = await callAdminForthApi({
-    path: `/plugin/${props.meta.uploadPluginInstanceId}/get_s3_upload_url`,
+    path: `/plugin/${props.meta.uploadPluginInstanceId}/get_file_upload_url`,
     method: 'POST',
     body: {
       originalFilename,

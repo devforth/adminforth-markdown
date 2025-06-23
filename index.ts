@@ -61,9 +61,11 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         throw new Error(`${plugin} Plugin for attachment field '${this.options.attachments!.attachmentFieldName}' not found in resource '${this.options.attachments!.attachmentResource}', please check if Upload Plugin is installed on the field ${this.options.attachments!.attachmentFieldName}`);
       }
 
-      if (plugin.pluginOptions.s3ACL !== 'public-read') {
+      if (!plugin.pluginOptions.storageAdapter.objectCanBeAccesedPublicly()) {
         throw new Error(`Upload Plugin for attachment field '${this.options.attachments!.attachmentFieldName}' in resource '${this.options.attachments!.attachmentResource}' 
-          should have s3ACL set to 'public-read' (in vast majority of cases signed urls inside of HTML text is not desired behavior, so we did not implement it)`);
+          uses adapter which is not configured to store objects in public way, so it will produce only signed private URLs which can not be used in HTML text of blog posts.
+          Please configure adapter in such way that it will store objects publicly (e.g.  for S3 use 'public-read' ACL).  
+        `);
       }
       this.uploadPlugin = plugin;
     }
