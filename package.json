@@ -28,7 +28,7 @@
     "type": "git",
     "url": "https://github.com/devforth/adminforth-markdown.git"
   },
-  "dependencies": {
+  "peerDependencies": {
     "adminforth": "latest"
   },
   "release": {
