@@ -29,7 +29,7 @@
     "url": "https://github.com/devforth/adminforth-markdown.git"
   },
   "peerDependencies": {
-    "adminforth": "latest"
+    "adminforth": "^2.13.0-next.51"
   },
   "release": {
     "plugins": [
