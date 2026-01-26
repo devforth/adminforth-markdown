@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
 }
 
 .milkdown milkdown-latex-inline-edit .container button:hover {
-  @apply bg-gray-300 dark:bg-gray-500;
+  @apply bg-gray-300 dark:bg-gray-500; 
 }
 
 .milkdown milkdown-link-edit > .link-edit {
