@@ -186,7 +186,7 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style>
+<style lang="scss">
 #editor [contenteditable="true"] {
   @apply bg-transparent outline-none border-none shadow-none transition-none min-h-10 p-2 bg-gray-700 dark:placeholder-gray-400;
 }
@@ -224,4 +224,39 @@ onBeforeUnmount(() => {
 }
 
 
+#editor div {
+  border-radius: 6px;
+}
+
+.ProseMirror [data-placeholder]::before {
+  color: #6b7280;
+}
+
+.milkdown milkdown-block-handle .operation-item:hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.milkdown milkdown-slash-menu .tab-group ul li:hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+} 
+
+.milkdown milkdown-toolbar {
+  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
+}
+
+.milkdown milkdown-toolbar .toolbar-item:hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.milkdown milkdown-latex-inline-edit {
+  @apply bg-gray-200
+}
+
+.milkdown milkdown-latex-inline-edit .container button:hover {
+  @apply bg-gray-300 dark:bg-gray-500;
+}
+
+.milkdown milkdown-link-edit > .link-edit {
+  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
+}
 </style>
