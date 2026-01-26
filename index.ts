@@ -67,7 +67,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           Please configure adapter in such way that it will store objects publicly (e.g.  for S3 use 'public-read' ACL).  
         `);
       }
-      this.uploadPlugin = plugin;
+      this.uploadPlugin = plugin as AdminForthPlugin;
     }
 
     column.components.show = {
@@ -139,7 +139,8 @@ export default class MarkdownPlugin extends AdminForthPlugin {
                     [options.attachments.attachmentRecordIdFieldName]: recordId,
                     [options.attachments.attachmentResourceIdFieldName]: resourceConfig.resourceId,
                   },
-                  adminUser
+                  adminUser,
+                  response: {} as any
                 }
               );
               console.log('Successfully created record for:', s3Path);
@@ -169,6 +170,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
               recordId: a[attachmentPrimaryKeyField.name],
               adminUser,
               record: a,
+              response: {} as any
             }
           )
         }))
