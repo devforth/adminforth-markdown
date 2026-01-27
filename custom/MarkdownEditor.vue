@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
 
 <style lang="scss">
 #editor [contenteditable="true"] {
-  @apply bg-transparent outline-none border-none shadow-none transition-none min-h-10 p-2 bg-gray-700 dark:placeholder-gray-400;
+  @apply bg-transparent outline-none border-none shadow-none transition-none min-h-10 p-2;
 }
 
 #editor [contenteditable="true"].is-focused {
@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
 }
 
 
-#editor div {
+.editor, .milkdown {
   border-radius: 6px;
 }
 
@@ -259,4 +259,46 @@ onBeforeUnmount(() => {
 .milkdown milkdown-link-edit > .link-edit {
   @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
 }
+
+.milkdown milkdown-code-block .cm-editor {
+  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
+}
+
+.ͼo .cm-activeLineGutter {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.ͼo .cm-activeLine {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.cm-content {
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+}
+
+.milkdown milkdown-code-block .list-wrapper {
+  @apply bg-gray-50  border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
+}
+
+.milkdown milkdown-code-block .language-list-item:hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.milkdown milkdown-code-block .tools .language-button {
+  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
+}
+
+.milkdown milkdown-code-block .tools .language-button:hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
+
+.milkdown::selection {
+  background-color: #6b7280;
+}
+
+.ͼ4 .cm-line ::selection, .ͼ4 .cm-line::selection {
+  background-color: #6b7280 !important;
+}
+
 </style>
