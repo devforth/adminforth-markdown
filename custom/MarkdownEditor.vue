@@ -15,7 +15,7 @@ import { Editor } from '@milkdown/core';
 import { Crepe } from '@milkdown/crepe';
 import type { AdminForthColumn } from '@/types/Common';
 import '@milkdown/crepe/theme/common/style.css';
-import '@milkdown/crepe/theme/frame-dark.css';
+import '@milkdown/crepe/theme/frame.css';
 
 const props = defineProps<{
   column: AdminForthColumn,
