@@ -34,7 +34,6 @@ let crepeInstance: Crepe | null = null;
 
 function normalizeMarkdownForMilkdown(markdown: string): string {
   if (!markdown) return '';
-
   // Milkdown/Crepe’s remark parser can choke on raw HTML nodes inside list items
   // (e.g. `<br />` gets parsed as an `html` AST node). Convert those line breaks
   // back into plain markdown newlines before parsing.
