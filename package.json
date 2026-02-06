@@ -28,8 +28,8 @@
     "type": "git",
     "url": "https://github.com/devforth/adminforth-markdown.git"
   },
-  "dependencies": {
-    "adminforth": "latest"
+  "peerDependencies": {
+    "adminforth": "next"
   },
   "release": {
     "plugins": [
