@@ -32,6 +32,15 @@ const isFocused = ref(false);
 let milkdownInstance: Editor | null = null;
 let crepeInstance: Crepe | null = null;
 
+function normalizeMarkdownForMilkdown(markdown: string): string {
+  if (!markdown) return '';
+
+  // Milkdown/Crepe’s remark parser can choke on raw HTML nodes inside list items
+  // (e.g. `<br />` gets parsed as an `html` AST node). Convert those line breaks
+  // back into plain markdown newlines before parsing.
+  return markdown.replace(/<br\s*\/?\s*>/gi, '\n');
+}
+
 onMounted(async () => {
   if (!editorContainer.value) return;
   try {
@@ -64,14 +73,19 @@ onMounted(async () => {
 
     // Crepe
     if (props.column.components.edit.meta.pluginType === 'crepe' || props.column.components.create.meta.pluginType === 'crepe') {
+      const normalizedInitialValue = normalizeMarkdownForMilkdown(content.value);
+      if (normalizedInitialValue !== content.value) {
+        content.value = normalizedInitialValue;
+      }
+
       crepeInstance = await new Crepe({
         root: editorContainer.value,
-        defaultValue: content.value,
+        defaultValue: normalizedInitialValue,
       });
 
       crepeInstance.on((listener) => {
         listener.markdownUpdated(async () => {
-          let markdownContent = crepeInstance.getMarkdown(); 
+          let markdownContent = normalizeMarkdownForMilkdown(crepeInstance.getMarkdown());
           markdownContent = await replaceBlobsWithS3Urls(markdownContent);
           emit('update:value', markdownContent);
         });
