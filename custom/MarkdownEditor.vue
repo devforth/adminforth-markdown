@@ -241,6 +241,128 @@ let removePasteListenerSecondary: (() => void) | null = null;
 let removeGlobalPasteListener: (() => void) | null = null;
 let removeGlobalKeydownListener: (() => void) | null = null;
 
+type MarkdownImageRef = {
+  lineNumber: number;
+  src: string;
+};
+
+let imageViewZoneIds: string[] = [];
+let imagePreviewUpdateTimer: number | null = null;
+
+function normalizeMarkdownImageSrc(raw: string): string {
+  let src = raw.trim();
+  if (src.startsWith('<') && src.endsWith('>')) src = src.slice(1, -1).trim();
+  return src;
+}
+
+function findImagesInModel(textModel: monaco.editor.ITextModel): MarkdownImageRef[] {
+  const images: MarkdownImageRef[] = [];
+  const lineCount = textModel.getLineCount();
+
+  // Minimal image syntax: ![alt](src) or ![alt](src "title")
+  // This intentionally keeps parsing simple and line-based.
+  const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+    const line = textModel.getLineContent(lineNumber);
+    re.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    // Allow multiple images on the same line.
+    while ((match = re.exec(line))) {
+      const src = normalizeMarkdownImageSrc(match[1] ?? '');
+      if (!src) continue;
+      images.push({ lineNumber, src });
+    }
+  }
+
+  return images;
+}
+
+function clearImagePreviews() {
+  if (!editor) return;
+  if (!imageViewZoneIds.length) return;
+
+  editor.changeViewZones((accessor) => {
+    for (const zoneId of imageViewZoneIds) accessor.removeZone(zoneId);
+  });
+  imageViewZoneIds = [];
+}
+
+function updateImagePreviews() {
+  if (!editor || !model) return;
+  const images = findImagesInModel(model);
+
+  clearImagePreviews();
+
+  // View zones reserve vertical space and thus shift lines down.
+  // We keep the implementation minimal: one zone per image ref.
+  editor.changeViewZones((accessor) => {
+    const newZoneIds: string[] = [];
+
+    images.forEach((img) => {
+      const wrapper = document.createElement('div');
+      wrapper.style.padding = '6px 0';
+      wrapper.style.pointerEvents = 'none';
+
+      const preview = document.createElement('div');
+      preview.style.display = 'inline-block';
+      preview.style.borderRadius = '6px';
+      preview.style.overflow = 'hidden';
+      preview.style.maxWidth = '220px';
+      preview.style.maxHeight = '140px';
+
+      const imageEl = document.createElement('img');
+      imageEl.src = img.src;
+      imageEl.style.maxWidth = '220px';
+      imageEl.style.maxHeight = '140px';
+      imageEl.style.display = 'block';
+      imageEl.style.opacity = '0.95';
+
+      preview.appendChild(imageEl);
+      wrapper.appendChild(preview);
+
+      const zone: monaco.editor.IViewZone = {
+        afterLineNumber: img.lineNumber,
+        heightInPx: 160,
+        domNode: wrapper,
+      };
+
+      const zoneId = accessor.addZone(zone);
+      newZoneIds.push(zoneId);
+
+      // Once image loads, adjust zone height to the rendered node.
+      imageEl.onload = () => {
+        if (!editor) return;
+        const measured = wrapper.offsetHeight;
+        const nextHeight = Math.max(40, Math.min(200, measured || 160));
+        if (zone.heightInPx !== nextHeight) {
+          zone.heightInPx = nextHeight;
+          editor.changeViewZones((a) => a.layoutZone(zoneId));
+        }
+      };
+
+      imageEl.onerror = () => {
+        // Keep the zone small if the image can't be loaded.
+        if (!editor) return;
+        zone.heightInPx = 40;
+        editor.changeViewZones((a) => a.layoutZone(zoneId));
+      };
+    });
+
+    imageViewZoneIds = newZoneIds;
+  });
+}
+
+function scheduleImagePreviewUpdate() {
+  if (imagePreviewUpdateTimer !== null) {
+    window.clearTimeout(imagePreviewUpdateTimer);
+  }
+  imagePreviewUpdateTimer = window.setTimeout(() => {
+    imagePreviewUpdateTimer = null;
+    updateImagePreviews();
+  }, 120);
+}
+
 function isDarkMode(): boolean {
   return document.documentElement.classList.contains('dark');
 }
@@ -286,6 +408,9 @@ onMounted(async () => {
         const markdown = model?.getValue() ?? '';
         content.value = markdown;
         emit('update:value', markdown);
+
+        // Keep image previews in sync with markdown edits.
+        scheduleImagePreviewUpdate();
       }),
     );
 
@@ -428,6 +553,9 @@ onMounted(async () => {
     removeGlobalKeydownListener = () => {
       document.removeEventListener('keydown', onGlobalKeydown, true);
     };
+
+    // Initial render of previews.
+    scheduleImagePreviewUpdate();
   } catch (error) {
     console.error('Failed to initialize editor:', error);
   }
@@ -480,6 +608,13 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
 }
 
 onBeforeUnmount(() => {
+  if (imagePreviewUpdateTimer !== null) {
+    window.clearTimeout(imagePreviewUpdateTimer);
+    imagePreviewUpdateTimer = null;
+  }
+
+  clearImagePreviews();
+
   removePasteListener?.();
   removePasteListener = null;
 
