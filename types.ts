@@ -38,5 +38,19 @@ export interface PluginOptions {
      * Why we force to store and ask for resource id if we already have record id? Because in amny use cases attachments resource is shared between multiple resources, and record id might be not be unique across resources, but resource id + record id will be always unique.
      */
     attachmentResourceIdFieldName: string; // e.g. 'apartment_resource_id',
+
+    /**
+     * Optional: field name in attachment resource where title of image will be stored.
+     * When in markdown title of image is mentioned e.g. ![alt](image.jpg "title"), it will be parsed and stored in attachment resource. 
+     * If you will update title in markdown, it will be updated in attachment resource as well.
+     */
+    attachmentTitleFieldName?: string; // e.g. 'title',
+
+    /**
+     * Optional: field name in attachment resource where alt of image will be stored.
+     * When in markdown alt of image is mentioned e.g. ![alt](image.jpg), it will be parsed and stored in attachment resource.
+     * If you will update alt in markdown, it will be updated in attachment resource as well.
+     */
+    attachmentAltFieldName?: string; // e.g. 'alt',
   },
 }

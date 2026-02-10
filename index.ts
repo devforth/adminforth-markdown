@@ -52,6 +52,20 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       if (!field) {
         throw new Error(`Field '${this.options.attachments!.attachmentFieldName}' not found in resource '${this.options.attachments!.attachmentResource}'`);
       }
+
+      if (this.options.attachments.attachmentTitleFieldName) {
+        const titleField = await resource.columns.find(c => c.name === this.options.attachments!.attachmentTitleFieldName);
+        if (!titleField) {
+          throw new Error(`Field '${this.options.attachments!.attachmentTitleFieldName}' not found in resource '${this.options.attachments!.attachmentResource}'`);
+        }
+      }
+
+      if (this.options.attachments.attachmentAltFieldName) {
+        const altField = await resource.columns.find(c => c.name === this.options.attachments!.attachmentAltFieldName);
+        if (!altField) {
+          throw new Error(`Field '${this.options.attachments!.attachmentAltFieldName}' not found in resource '${this.options.attachments!.attachmentResource}'`);
+        }
+      }
       
       const plugin = await adminforth.activatedPlugins.find(p => 
         p.resourceConfig!.resourceId === this.options.attachments!.attachmentResource && 
@@ -106,43 +120,74 @@ export default class MarkdownPlugin extends AdminForthPlugin {
     const editorRecordPkField = resourceConfig.columns.find(c => c.primaryKey);
     if (this.options.attachments) {
 
-      function getAttachmentPathes(markdown: string): string[] {
+      type AttachmentMeta = { key: string; alt: string | null; title: string | null };
+
+      const extractKeyFromUrl = (url: string) => url.replace(/^https:\/\/[^\/]+\/+/, '');
+
+      function getAttachmentMetas(markdown: string): AttachmentMeta[] {
         if (!markdown) {
           return [];
         }
 
-        const s3PathRegex = /!\[.*?\]\((https:\/\/.*?\/.*?)(\?.*)?\)/g;
-      
-        const matches = [...markdown.matchAll(s3PathRegex)];
+        // Minimal image syntax: ![alt](src) or ![alt](src "title") or ![alt](src 'title')
+        // We only track https URLs and only those that look like S3/AWS public URLs.
+        const imageRegex = /!\[([^\]]*)\]\(\s*(https:\/\/[^\s)]+)\s*(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*\)/g;
 
-        return matches
-          .map(match => match[1])
-          .filter(src => src.includes("s3") || src.includes("amazonaws"));
+        const byKey = new Map<string, AttachmentMeta>();
+        for (const match of markdown.matchAll(imageRegex)) {
+          const altRaw = match[1] ?? '';
+          const srcRaw = match[2];
+          const titleRaw = (match[3] ?? match[4]) ?? null;
+
+          const srcNoQuery = srcRaw.split('?')[0];
+          if (!srcNoQuery.includes('s3') && !srcNoQuery.includes('amazonaws')) {
+            continue;
+          }
+
+          const key = extractKeyFromUrl(srcNoQuery);
+          byKey.set(key, {
+            key,
+            alt: altRaw,
+            title: titleRaw,
+          });
+        }
+        return [...byKey.values()];
       }
 
       const createAttachmentRecords = async (
-        adminforth: IAdminForth, options: PluginOptions, recordId: any, s3Paths: string[], adminUser: AdminUser
+        adminforth: IAdminForth,
+        options: PluginOptions,
+        recordId: any,
+        metas: AttachmentMeta[],
+        adminUser: AdminUser
       ) => {
-        const extractKey = (s3Paths: string) => s3Paths.replace(/^https:\/\/[^\/]+\/+/, '');
+        if (!metas.length) {
+          return;
+        }
         process.env.HEAVY_DEBUG && console.log('📸 Creating attachment records', JSON.stringify(recordId))
         try {
-          await Promise.all(s3Paths.map(async (s3Path) => {
-            console.log('Processing path:', s3Path);
+          await Promise.all(metas.map(async (meta) => {
             try {
-              await adminforth.createResourceRecord(
-                {
-                  resource: this.attachmentResource,
-                  record: {
-                    [options.attachments.attachmentFieldName]: extractKey(s3Path),
-                    [options.attachments.attachmentRecordIdFieldName]: recordId,
-                    [options.attachments.attachmentResourceIdFieldName]: resourceConfig.resourceId,
-                  },
-                  adminUser,
-                }
-              );
-              console.log('Successfully created record for:', s3Path);
+              const recordToCreate: any = {
+                [options.attachments.attachmentFieldName]: meta.key,
+                [options.attachments.attachmentRecordIdFieldName]: recordId,
+                [options.attachments.attachmentResourceIdFieldName]: resourceConfig.resourceId,
+              };
+
+              if (options.attachments.attachmentTitleFieldName) {
+                recordToCreate[options.attachments.attachmentTitleFieldName] = meta.title;
+              }
+              if (options.attachments.attachmentAltFieldName) {
+                recordToCreate[options.attachments.attachmentAltFieldName] = meta.alt;
+              }
+
+              await adminforth.createResourceRecord({
+                resource: this.attachmentResource,
+                record: recordToCreate,
+                adminUser,
+              });
             } catch (err) {
-              console.error('Error creating record for', s3Path, err);
+              console.error('Error creating record for', meta.key, err);
             }
           }));
         } catch (err) {
@@ -151,35 +196,95 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       }
 
       const deleteAttachmentRecords = async (
-        adminforth: IAdminForth, options: PluginOptions, s3Paths: string[], adminUser: AdminUser
+        adminforth: IAdminForth,
+        options: PluginOptions,
+        recordId: any,
+        keys: string[],
+        adminUser: AdminUser
       ) => {
-        if (!s3Paths.length) {
+        if (!keys.length) {
           return;
         }
         const attachmentPrimaryKeyField = this.attachmentResource.columns.find(c => c.primaryKey);
-        const attachments = await adminforth.resource(options.attachments.attachmentResource).list(
-          Filters.IN(options.attachments.attachmentFieldName, s3Paths)
-        );
+        const attachments = await adminforth.resource(options.attachments.attachmentResource).list([
+          Filters.EQ(options.attachments.attachmentRecordIdFieldName, recordId),
+          Filters.EQ(options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId),
+          Filters.IN(options.attachments.attachmentFieldName, keys),
+        ]);
+
         await Promise.all(attachments.map(async (a: any) => {
-          await adminforth.deleteResourceRecord(
-            {
-              resource: this.attachmentResource,
-              recordId: a[attachmentPrimaryKeyField.name],
-              adminUser,
-              record: a,
-            }
-          )
+          await adminforth.deleteResourceRecord({
+            resource: this.attachmentResource,
+            recordId: a[attachmentPrimaryKeyField.name],
+            adminUser,
+            record: a,
+          })
         }))
+      }
+
+      const updateAttachmentRecordsMetadata = async (
+        adminforth: IAdminForth,
+        options: PluginOptions,
+        recordId: any,
+        metas: AttachmentMeta[],
+        adminUser: AdminUser
+      ) => {
+        if (!metas.length) {
+          return;
+        }
+        if (!options.attachments.attachmentTitleFieldName && !options.attachments.attachmentAltFieldName) {
+          return;
+        }
+        const attachmentPrimaryKeyField = this.attachmentResource.columns.find(c => c.primaryKey);
+        const metaByKey = new Map(metas.map(m => [m.key, m] as const));
+
+        const existingAparts = await adminforth.resource(options.attachments.attachmentResource).list([
+          Filters.EQ(options.attachments.attachmentRecordIdFieldName, recordId),
+          Filters.EQ(options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
+        ]);
+
+        await Promise.all(existingAparts.map(async (a: any) => {
+          const key = a[options.attachments.attachmentFieldName];
+          const meta = metaByKey.get(key);
+          if (!meta) {
+            return;
+          }
+
+          const patch: any = {};
+          if (options.attachments.attachmentTitleFieldName) {
+            const field = options.attachments.attachmentTitleFieldName;
+            if ((a[field] ?? null) !== (meta.title ?? null)) {
+              patch[field] = meta.title;
+            }
+          }
+          if (options.attachments.attachmentAltFieldName) {
+            const field = options.attachments.attachmentAltFieldName;
+            if ((a[field] ?? null) !== (meta.alt ?? null)) {
+              patch[field] = meta.alt;
+            }
+          }
+          if (!Object.keys(patch).length) {
+            return;
+          }
+
+          await adminforth.updateResourceRecord({
+            resource: this.attachmentResource,
+            recordId: a[attachmentPrimaryKeyField.name],
+            record: patch,
+            oldRecord: a,
+            adminUser,
+          });
+        }));
       }
       
       (resourceConfig.hooks.create.afterSave).push(async ({ record, adminUser }: { record: any, adminUser: AdminUser }) => {
         // find all s3Paths in the html
-        const s3Paths = getAttachmentPathes(record[this.options.fieldName])
-        
-        process.env.HEAVY_DEBUG && console.log('📸 Found s3Paths', s3Paths);
+        const metas = getAttachmentMetas(record[this.options.fieldName]);
+        const keys = metas.map(m => m.key);
+        process.env.HEAVY_DEBUG && console.log('📸 Found attachment keys', keys);
         // create attachment records
         await createAttachmentRecords(
-          adminforth, this.options, record[editorRecordPkField.name], s3Paths, adminUser);
+          adminforth, this.options, record[editorRecordPkField.name], metas, adminUser);
 
         return { ok: true };
       });
@@ -198,18 +303,28 @@ export default class MarkdownPlugin extends AdminForthPlugin {
             Filters.EQ(this.options.attachments.attachmentRecordIdFieldName, recordId),
             Filters.EQ(this.options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
           ]);
-          const existingS3Paths = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
-          const newS3Paths = getAttachmentPathes(record[this.options.fieldName]);
-          process.env.HEAVY_DEBUG && console.log('📸 Existing s3Paths (from db)', existingS3Paths)
-          process.env.HEAVY_DEBUG && console.log('📸 Found new s3Paths (from text)', newS3Paths);
-          const toDelete = existingS3Paths.filter(s3Path => !newS3Paths.includes(s3Path));
-          const toAdd = newS3Paths.filter(s3Path => !existingS3Paths.includes(s3Path));
-          process.env.HEAVY_DEBUG && console.log('📸 Found s3Paths to delete', toDelete)
-          process.env.HEAVY_DEBUG && console.log('📸 Found s3Paths to add', toAdd);
+          const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
+
+          const metas = getAttachmentMetas(record[this.options.fieldName]);
+          const newKeys = metas.map(m => m.key);
+
+          process.env.HEAVY_DEBUG && console.log('📸 Existing keys (from db)', existingKeys)
+          process.env.HEAVY_DEBUG && console.log('📸 Found new keys (from text)', newKeys);
+
+          const toDelete = existingKeys.filter(key => !newKeys.includes(key));
+          const toAdd = newKeys.filter(key => !existingKeys.includes(key));
+
+          process.env.HEAVY_DEBUG && console.log('📸 Found keys to delete', toDelete)
+          process.env.HEAVY_DEBUG && console.log('📸 Found keys to add', toAdd);
+
+          const metasToAdd = metas.filter(m => toAdd.includes(m.key));
           await Promise.all([
-            deleteAttachmentRecords(adminforth, this.options, toDelete, adminUser),
-            createAttachmentRecords(adminforth, this.options, recordId, toAdd, adminUser)
+            deleteAttachmentRecords(adminforth, this.options, recordId, toDelete, adminUser),
+            createAttachmentRecords(adminforth, this.options, recordId, metasToAdd, adminUser)
           ]);
+
+          // Keep alt/title in sync for existing attachments too
+          await updateAttachmentRecordsMetadata(adminforth, this.options, recordId, metas, adminUser);
 
           return { ok: true };
 
@@ -225,9 +340,9 @@ export default class MarkdownPlugin extends AdminForthPlugin {
               Filters.EQ(this.options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
             ]
           );
-          const existingS3Paths = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
-          process.env.HEAVY_DEBUG && console.log('📸 Found s3Paths to delete', existingS3Paths);
-          await deleteAttachmentRecords(adminforth, this.options, existingS3Paths, adminUser);
+          const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
+          process.env.HEAVY_DEBUG && console.log('📸 Found keys to delete', existingKeys);
+          await deleteAttachmentRecords(adminforth, this.options, record[editorRecordPkField.name], existingKeys, adminUser);
 
           return { ok: true };
         }
