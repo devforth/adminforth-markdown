@@ -122,7 +122,20 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
       type AttachmentMeta = { key: string; alt: string | null; title: string | null };
 
-      const extractKeyFromUrl = (url: string) => url.replace(/^https:\/\/[^\/]+\/+/, '');
+      const stripQueryAndHash = (value: string) => value.split('#')[0].split('?')[0];
+
+      const extractKeyFromUrl = (url: string) => {
+        // Supports absolute https/http URLs and protocol-relative URLs.
+        // Returns the object key as a path without leading slashes.
+        try {
+          const normalized = url.startsWith('//') ? `https:${url}` : url;
+          const u = new URL(normalized);
+          return u.pathname.replace(/^\/+/, '');
+        } catch {
+          // Fallback: strip scheme/host if it looks like a URL, otherwise treat as a path.
+          return stripQueryAndHash(url).replace(/^https?:\/\/[^\/]+\/+/, '').replace(/^\/+/, '');
+        }
+      };
 
       function getAttachmentMetas(markdown: string): AttachmentMeta[] {
         if (!markdown) {
@@ -130,8 +143,8 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         }
 
         // Minimal image syntax: ![alt](src) or ![alt](src "title") or ![alt](src 'title')
-        // We only track https URLs and only those that look like S3/AWS public URLs.
-        const imageRegex = /!\[([^\]]*)\]\(\s*(https:\/\/[^\s)]+)\s*(?:\s+(?:"([^"]*)"|'([^']*)'))?\s*\)/g;
+        // We track external (http/https) and relative sources, but skip data: URLs.
+        const imageRegex = /!\[([^\]]*)\]\(\s*([^\s)]+)\s*(?:\s+(?:\"([^\"]*)\"|'([^']*)'))?\s*\)/g;
 
         const byKey = new Map<string, AttachmentMeta>();
         for (const match of markdown.matchAll(imageRegex)) {
@@ -139,12 +152,16 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           const srcRaw = match[2];
           const titleRaw = (match[3] ?? match[4]) ?? null;
 
-          const srcNoQuery = srcRaw.split('?')[0];
-          if (!srcNoQuery.includes('s3') && !srcNoQuery.includes('amazonaws')) {
+          const srcTrimmed = srcRaw.trim().replace(/^<|>$/g, '');
+          if (!srcTrimmed || srcTrimmed.startsWith('data:')) {
             continue;
           }
 
+          const srcNoQuery = stripQueryAndHash(srcTrimmed);
           const key = extractKeyFromUrl(srcNoQuery);
+          if (!key) {
+            continue;
+          }
           byKey.set(key, {
             key,
             alt: altRaw,
