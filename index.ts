@@ -91,7 +91,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
-        pluginType: 'crepe',
         uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
       },
     };
@@ -101,7 +100,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
-        pluginType: 'crepe',
         uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
       },
     };
@@ -140,7 +138,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
                     [options.attachments.attachmentResourceIdFieldName]: resourceConfig.resourceId,
                   },
                   adminUser,
-                  response: {} as any
                 }
               );
               console.log('Successfully created record for:', s3Path);
@@ -170,7 +167,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
               recordId: a[attachmentPrimaryKeyField.name],
               adminUser,
               record: a,
-              response: {} as any
             }
           )
         }))

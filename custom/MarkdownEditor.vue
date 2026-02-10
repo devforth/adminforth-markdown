@@ -1,157 +1,444 @@
 <template>
   <div class="mb-2"></div>
-    <div ref="editorContainer" id="editor" :class="[
-    'text-sm rounded-lg block w-full transition-all box-border',
-    isFocused
-      ? 'ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
-      : 'bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white',
-  ]"></div>
+  <div
+    ref="editorContainer"
+    id="editor"
+    :class="[
+      'text-sm rounded-lg block w-full transition-all box-border overflow-hidden',
+      isFocused
+        ? 'ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary'
+        : 'border border-gray-300 dark:border-gray-600',
+    ]"
+  ></div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { callAdminForthApi } from '@/utils';
-import { Editor } from '@milkdown/core';
-import { Crepe } from '@milkdown/crepe';
-import type { AdminForthColumn } from '@/types/Common';
-import '@milkdown/crepe/theme/common/style.css';
-import '@milkdown/crepe/theme/frame.css';
+import * as monaco from 'monaco-editor';
+import TurndownService from 'turndown';
+import { gfm, tables } from 'turndown-plugin-gfm';
 
 const props = defineProps<{
-  column: AdminForthColumn,
+  column: any,
   record: any,
   meta: any,
 }>()
 
 const emit = defineEmits(['update:value']);
 const editorContainer = ref<HTMLElement | null>(null);
-const content = ref(props.record[props.column.name] || '');
+const content = ref(String(props.record?.[props.column.name] ?? ''));
 
 const isFocused = ref(false);
 
-let milkdownInstance: Editor | null = null;
-let crepeInstance: Crepe | null = null;
+const debug = (...args: any[]) => console.warn('[adminforth-markdown]', ...args);
+debug('MarkdownEditor module loaded');
 
-function normalizeMarkdownForMilkdown(markdown: string): string {
-  if (!markdown) return '';
-  // Milkdown/Crepe’s remark parser can choke on raw HTML nodes inside list items
-  // (e.g. `<br />` gets parsed as an `html` AST node). Convert those line breaks
-  // back into plain markdown newlines before parsing.
-  return markdown.replace(/<br\s*\/?\s*>/gi, '\n');
+let turndownService: TurndownService | null = null;
+
+function normalizeTableCellText(text: string): string {
+  let value = text;
+  value = value.replace(/\u00a0/g, ' ');
+  value = value.replace(/\r\n/g, '\n');
+  value = value.replace(/\r/g, '\n');
+  value = value.trim();
+  value = value.replace(/\n+/g, '<br>');
+  value = value.replace(/\|/g, '\\|');
+  return value;
+}
+
+function extractRowCells(row: HTMLTableRowElement): string[] {
+  const cells: string[] = [];
+  const rowCells = Array.from(row.cells);
+  for (const cell of rowCells) {
+    const text = cell.textContent ? cell.textContent : '';
+    cells.push(normalizeTableCellText(text));
+    const span = (cell as HTMLTableCellElement).colSpan;
+    if (span && span > 1) {
+      for (let i = 1; i < span; i += 1) cells.push('');
+    }
+  }
+  return cells;
+}
+
+function padRow(cells: string[], columnCount: number): string[] {
+  if (cells.length >= columnCount) return cells;
+  const out = cells.slice();
+  while (out.length < columnCount) out.push('');
+  return out;
+}
+
+function markdownTableLine(cells: string[]): string {
+  return `| ${cells.join(' | ')} |`;
+}
+
+function htmlTableToMarkdown(table: HTMLTableElement): string {
+  const thead = table.tHead;
+  let headerRow: HTMLTableRowElement | null = null;
+  if (thead && thead.rows && thead.rows.length) headerRow = thead.rows[0];
+
+  const bodyRows: HTMLTableRowElement[] = [];
+  const bodies = Array.from(table.tBodies);
+  for (const body of bodies) {
+    bodyRows.push(...Array.from(body.rows));
+  }
+
+  // If no <tbody>, fall back to all rows not in <thead>.
+  if (!bodyRows.length) {
+    const allRows = Array.from(table.rows);
+    for (const row of allRows) {
+      if (thead && thead.contains(row)) continue;
+      bodyRows.push(row);
+    }
+  }
+
+  // If no explicit <thead>, treat the first row as the header.
+  if (!headerRow) {
+    if (bodyRows.length) {
+      headerRow = bodyRows.shift() || null;
+    } else {
+      const allRows = Array.from(table.rows);
+      if (allRows.length) headerRow = allRows[0];
+    }
+  }
+
+  if (!headerRow) return '';
+
+  const headerCells = extractRowCells(headerRow);
+  const dataCells = bodyRows.map(extractRowCells);
+
+  let columnCount = headerCells.length;
+  for (const row of dataCells) {
+    if (row.length > columnCount) columnCount = row.length;
+  }
+  if (columnCount < 1) columnCount = 1;
+
+  const header = padRow(headerCells, columnCount);
+  const separator: string[] = [];
+  for (let i = 0; i < columnCount; i += 1) separator.push(':---');
+
+  const lines: string[] = [];
+  lines.push(markdownTableLine(header));
+  lines.push(markdownTableLine(separator));
+  for (const row of dataCells) {
+    lines.push(markdownTableLine(padRow(row, columnCount)));
+  }
+
+  return `\n\n${lines.join('\n')}\n\n`;
+}
+
+function stripOneTrailingNewline(text: string): string {
+  if (text.endsWith('\r\n')) return text.slice(0, -2);
+  if (text.endsWith('\n')) return text.slice(0, -1);
+  if (text.endsWith('\r')) return text.slice(0, -1);
+  return text;
+}
+
+function escapeMarkdownLinkTitle(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function fenceForCodeBlock(text: string): string {
+  let maxBackticks = 0;
+  let current = 0;
+
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === '`') {
+      current += 1;
+      if (current > maxBackticks) maxBackticks = current;
+    } else {
+      current = 0;
+    }
+  }
+
+  let fenceLen = maxBackticks + 1;
+  if (fenceLen < 3) fenceLen = 3;
+  return '`'.repeat(fenceLen);
+}
+
+function getTurndownService(): TurndownService {
+  if (turndownService) return turndownService;
+  turndownService = new TurndownService();
+  // Enable GitHub Flavored Markdown features like tables.
+  (turndownService as any).use(gfm);
+  (turndownService as any).use(tables);
+
+  // Convert <pre> without nested <code> into fenced code blocks.
+  turndownService.addRule('pre-fenced-code', {
+    filter(node) {
+      if (!node) return false;
+      if (node.nodeName !== 'PRE') return false;
+      const el = node as HTMLElement;
+      return el.querySelector('code') === null;
+    },
+    replacement(_content, node) {
+      const el = node as HTMLElement;
+      const raw = el.textContent ? el.textContent : '';
+      const code = stripOneTrailingNewline(raw);
+      const fence = fenceForCodeBlock(code);
+      return `\n\n${fence}\n${code}\n${fence}\n\n`;
+    },
+  });
+
+  // Custom table conversion: emit classic Markdown tables with a header separator.
+  // This rule is added last, so it takes precedence over plugin table handling.
+  turndownService.addRule('table-classic-markdown', {
+    filter(node) {
+      return Boolean(node && node.nodeName === 'TABLE');
+    },
+    replacement(_content, node) {
+      const table = node as HTMLTableElement;
+      return htmlTableToMarkdown(table);
+    },
+  });
+
+  turndownService.addRule('image-with-title', {
+    filter(node) {
+      return Boolean(node && node.nodeName === 'IMG');
+    },
+    replacement(_content, node) {
+      const img = node as HTMLImageElement;
+
+      const srcAttr = img.getAttribute('src');
+      const src = srcAttr ? srcAttr.trim() : '';
+      if (!src) return '';
+
+      const altAttr = img.getAttribute('alt');
+      const titleAttr = img.getAttribute('title');
+
+      const alt = altAttr ? altAttr.trim() : '';
+      const title = titleAttr ? titleAttr.trim() : '';
+
+      let altFinal = '';
+      let titleFinal = '';
+
+      if (alt && title) {
+        altFinal = alt;
+        titleFinal = title;
+      } else if (alt && !title) {
+        altFinal = alt;
+        titleFinal = alt;
+      } else if (!alt && title) {
+        altFinal = title;
+        titleFinal = title;
+      } else {
+        return `![](${src})`;
+      }
+
+      const escapedTitle = escapeMarkdownLinkTitle(titleFinal);
+      return `![${altFinal}](${src} "${escapedTitle}")`;
+    },
+  });
+
+  return turndownService;
+}
+
+let editor: monaco.editor.IStandaloneCodeEditor | null = null;
+let model: monaco.editor.ITextModel | null = null;
+const disposables: monaco.IDisposable[] = [];
+let removePasteListener: (() => void) | null = null;
+let removePasteListenerSecondary: (() => void) | null = null;
+let removeGlobalPasteListener: (() => void) | null = null;
+let removeGlobalKeydownListener: (() => void) | null = null;
+
+function isDarkMode(): boolean {
+  return document.documentElement.classList.contains('dark');
+}
+
+function insertAtCursor(text: string) {
+  if (!editor) return;
+  const selection = editor.getSelection();
+  if (selection) {
+    editor.executeEdits('insert', [{ range: selection, text, forceMoveMarkers: true }]);
+    return;
+  }
+  const position = editor.getPosition();
+  if (!position) return;
+  const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+  editor.executeEdits('insert', [{ range, text, forceMoveMarkers: true }]);
+}
+
+function fileFromClipboardImage(blob: Blob): File {
+  const type = blob.type || 'image/png';
+  const ext = type.split('/')[1] || 'png';
+  const filename = `pasted-image-${Date.now()}.${ext}`;
+  return new File([blob], filename, { type });
 }
 
 onMounted(async () => {
   if (!editorContainer.value) return;
   try {
-    // Milkdown
-    // console.log('props.cole', props.column)
-    // if (props.column.components.edit.meta.pluginType === 'milkdown' || props.column.components.create.meta.pluginType === 'milkdown') {
-    //   milkdownInstance = await Editor.make()
-    //     .config((ctx) => {
-    //       ctx.set(rootCtx, editorContainer.value!);
-    //       ctx.set(defaultValueCtx, content.value);
-    //       ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-    //         content.value = markdown;
-    //         emit('update:value', markdown);
-    //       });
-    //       ctx.get(listenerCtx).focus(() => {
-    //         isFocused.value = true;
-    //       });
+    monaco.editor.setTheme(isDarkMode() ? 'vs-dark' : 'vs');
 
-    //       ctx.get(listenerCtx).blur(() => {
-    //         isFocused.value = false;
-    //       });
-    //     })
-    //     .use(commonmark)
-    //     .use(gfm)
-    //     .use(listener)
-    //     .create();
+    model = monaco.editor.createModel(content.value, 'markdown');
+    editor = monaco.editor.create(editorContainer.value, {
+      model,
+      language: 'markdown',
+      automaticLayout: true,
+    });
 
-    //   console.log('Milkdown editor created');
-    // }
+    debug('Monaco editor created', {
+      hasUploadPluginInstanceId: Boolean(props.meta?.uploadPluginInstanceId),
+    });
 
-    // Crepe
-    if (props.column.components.edit.meta.pluginType === 'crepe' || props.column.components.create.meta.pluginType === 'crepe') {
-      const normalizedInitialValue = normalizeMarkdownForMilkdown(content.value);
-      if (normalizedInitialValue !== content.value) {
-        content.value = normalizedInitialValue;
+    disposables.push(
+      editor.onDidChangeModelContent(() => {
+        const markdown = model?.getValue() ?? '';
+        content.value = markdown;
+        emit('update:value', markdown);
+      }),
+    );
+
+    disposables.push(
+      editor.onDidFocusEditorText(() => {
+        isFocused.value = true;
+      }),
+    );
+    disposables.push(
+      editor.onDidBlurEditorText(() => {
+        isFocused.value = false;
+      }),
+    );
+
+    const domNode = editor.getDomNode();
+    // NOTE: Monaco may stop propagation at document-level capture, so editor DOM listeners
+    // may never fire. We'll still attach them, but the real handling is done in the
+    // global (document capture) paste listener below.
+    if (domNode) {
+      const noopPaste = () => {};
+      domNode.addEventListener('paste', noopPaste, true);
+      removePasteListener = () => domNode.removeEventListener('paste', noopPaste, true);
+    }
+    if (editorContainer.value) {
+      const noopPaste = () => {};
+      editorContainer.value.addEventListener('paste', noopPaste, true);
+      removePasteListenerSecondary = () => editorContainer.value?.removeEventListener('paste', noopPaste, true);
+    }
+
+    // Global listeners for diagnostics: if these don't fire,
+    // the component isn't running or logs are being stripped.
+    const onGlobalPaste = async (e: ClipboardEvent) => {
+      if ((e as any).__adminforthMarkdownHandled) return;
+      (e as any).__adminforthMarkdownHandled = true;
+
+      const targetEl = e.target as HTMLElement | null;
+      const dt = e.clipboardData;
+      debug('GLOBAL paste', {
+        target: targetEl?.tagName,
+        hasClipboardData: Boolean(dt),
+        types: dt ? Array.from(dt.types) : [],
+        items: dt ? dt.items.length : 0,
+        files: dt ? dt.files.length : 0,
+        editorHasTextFocus: Boolean(editor?.hasTextFocus?.()),
+      });
+
+      if (!editor || !domNode) return;
+      if (!targetEl || !domNode.contains(targetEl)) return;
+      if (!(editor.hasTextFocus?.() || isFocused.value)) return;
+      if (!dt) return;
+
+      const imageBlobs: Blob[] = [];
+
+      for (const item of Array.from(dt.items)) {
+        debug('clipboard item', { kind: item.kind, type: item.type });
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const blob = item.getAsFile();
+          if (blob) imageBlobs.push(blob);
+        }
       }
 
-      crepeInstance = await new Crepe({
-        root: editorContainer.value,
-        defaultValue: normalizedInitialValue,
-      });
+      if (!imageBlobs.length && dt.files?.length) {
+        for (const file of Array.from(dt.files)) {
+          debug('clipboard file', { name: file.name, type: file.type, size: file.size });
+          if (file.type?.startsWith('image/')) {
+            imageBlobs.push(file);
+          }
+        }
+      }
 
-      crepeInstance.on((listener) => {
-        listener.markdownUpdated(async () => {
-          let markdownContent = normalizeMarkdownForMilkdown(crepeInstance.getMarkdown());
-          markdownContent = await replaceBlobsWithS3Urls(markdownContent);
-          emit('update:value', markdownContent);
-        });
+      if (imageBlobs.length) {
+        if (!props.meta?.uploadPluginInstanceId) {
+          console.error('[adminforth-markdown] uploadPluginInstanceId is missing; cannot upload pasted image.');
+          return;
+        }
 
-        listener.focus(() => {
-          isFocused.value = true;
-        });
-        listener.blur(() => {
-          isFocused.value = false;
-        });
-      });
+        e.preventDefault();
+        e.stopPropagation();
 
-      await crepeInstance.create();
-      console.log('Crepe editor created');
-    }
+        editor.focus();
+        debug('uploading pasted images', { count: imageBlobs.length });
+
+        const markdownTags: string[] = [];
+        for (const blob of imageBlobs) {
+          const file = blob instanceof File ? blob : fileFromClipboardImage(blob);
+          try {
+            const url = await uploadFileToS3(file);
+            debug('upload result', { url });
+            if (typeof url === 'string' && url.length) {
+              markdownTags.push(`![](${url})`);
+            }
+          } catch (err) {
+            console.error('[adminforth-markdown] upload failed', err);
+          }
+        }
+
+        if (markdownTags.length) {
+          insertAtCursor(`${markdownTags.join('\n')}\n`);
+        }
+        return;
+      }
+
+      const html = dt.getData('text/html');
+      if (html && html.trim()) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        editor.focus();
+        try {
+          const markdown = getTurndownService().turndown(html);
+          if (markdown && markdown.trim()) {
+            insertAtCursor(markdown);
+          } else {
+            const text = dt.getData('text/plain');
+            if (text) insertAtCursor(text);
+          }
+        } catch (err) {
+          console.error('[adminforth-markdown] failed to convert HTML clipboard to markdown', err);
+          const text = dt.getData('text/plain');
+          if (text) insertAtCursor(text);
+        }
+      }
+    };
+
+    // Use document capture only (avoid duplicates).
+    document.addEventListener('paste', onGlobalPaste, true);
+    removeGlobalPasteListener = () => {
+      document.removeEventListener('paste', onGlobalPaste, true);
+    };
+
+    const onGlobalKeydown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+        debug('GLOBAL keydown Ctrl+V', {
+          target: (e.target as HTMLElement | null)?.tagName,
+          editorHasTextFocus: Boolean(editor?.hasTextFocus?.()),
+        });
+      }
+    };
+    document.addEventListener('keydown', onGlobalKeydown, true);
+    removeGlobalKeydownListener = () => {
+      document.removeEventListener('keydown', onGlobalKeydown, true);
+    };
   } catch (error) {
     console.error('Failed to initialize editor:', error);
   }
 });
 
-async function replaceBlobsWithS3Urls(markdownContent: string): Promise<string> {
-  const blobUrls = markdownContent.match(/blob:[^\s)]+/g);
-  const base64Images = markdownContent.match(/data:image\/[^;]+;base64,[^\s)]+/g);
-  if (blobUrls) {
-    for (let blobUrl of blobUrls) {
-      const file = await getFileFromBlobUrl(blobUrl);
-      if (file) {
-        const s3Url = await uploadFileToS3(file);
-        if (s3Url) {
-          markdownContent = markdownContent.replace(blobUrl, s3Url);
-        }
-      }
-    }
-  }
-  if (base64Images) {
-  for (let base64Image of base64Images) {
-      const file = await fetch(base64Image).then(res => res.blob()).then(blob => new File([blob], 'image.jpg', { type: blob.type }));
-      if (file) {
-        const s3Url = await uploadFileToS3(file);
-        if (s3Url) {
-          markdownContent = markdownContent.replace(base64Image, s3Url);
-        }
-      }
-    }
-  }
-  return markdownContent;
-}
-
-async function getFileFromBlobUrl(blobUrl: string): Promise<File | null> {
-  try {
-    const response = await fetch(blobUrl);
-    const blob = await response.blob();
-    const file = new File([blob], 'uploaded-image.jpg', { type: blob.type });
-    return file;
-  } catch (error) {
-    console.error('Failed to get file from blob URL:', error);
-    return null;
-  }
-}
-async function uploadFileToS3(file: File) {
+async function uploadFileToS3(file: File): Promise<string | undefined> {
   if (!file || !file.name) {
     console.error('File or file name is undefined');
     return;
   }
 
-  const formData = new FormData();
-  formData.append('image', file);
   const originalFilename = file.name.split('.').slice(0, -1).join('.');
   const originalExtension = file.name.split('.').pop();
 
@@ -177,10 +464,10 @@ async function uploadFileToS3(file: File) {
   xhr.setRequestHeader('x-amz-tagging', tagline);
   xhr.send(file);
 
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     xhr.onload = () => {
       if (xhr.status === 200) {
-        resolve(previewUrl);
+        resolve(previewUrl as string);
       } else {
         reject('Error uploading to S3');
       }
@@ -193,125 +480,33 @@ async function uploadFileToS3(file: File) {
 }
 
 onBeforeUnmount(() => {
-  milkdownInstance?.destroy();
-  crepeInstance?.destroy();
-  console.log('Editor destroyed');
+  removePasteListener?.();
+  removePasteListener = null;
+
+  removePasteListenerSecondary?.();
+  removePasteListenerSecondary = null;
+
+  removeGlobalPasteListener?.();
+  removeGlobalPasteListener = null;
+
+  removeGlobalKeydownListener?.();
+  removeGlobalKeydownListener = null;
+
+  for (const d of disposables) d.dispose();
+  disposables.length = 0;
+
+  editor?.dispose();
+  editor = null;
+  model?.dispose();
+  model = null;
 });
 </script>
 
 <style lang="scss">
-#editor [contenteditable="true"] {
-  @apply bg-transparent outline-none border-none shadow-none transition-none min-h-10 p-2;
-}
 
-#editor [contenteditable="true"].is-focused {
-  @apply ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary bg-white text-gray-900 dark:ring-darkPrimary dark:border-darkPrimary dark:bg-gray-700 dark:text-white;
-}
-
-#editor [contenteditable="true"]:not(.is-focused) {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-slash-menu {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white z-10;
-}
-
-.milkdown milkdown-slash-menu .menu-groups .menu-group li.hover {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-slash-menu .tab-group ul li.selected {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown-slash-menu .tab-group ul li.selected:hover {
-  @apply bg-gray-50 border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:text-white;
-}
-
-.milkdown milkdown-code-block {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-code-block .cm-gutters {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-
-.editor, .milkdown {
-  border-radius: 6px;
-}
-
-.ProseMirror [data-placeholder]::before {
-  color: #6b7280;
-}
-
-.milkdown milkdown-block-handle .operation-item:hover {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.milkdown milkdown-slash-menu .tab-group ul li:hover {
-  @apply bg-gray-200 dark:bg-gray-600;
-} 
-
-.milkdown milkdown-toolbar {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-toolbar .toolbar-item:hover {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.milkdown milkdown-latex-inline-edit {
-  @apply bg-gray-200
-}
-
-.milkdown milkdown-latex-inline-edit .container button:hover {
-  @apply bg-gray-300 dark:bg-gray-500; 
-}
-
-.milkdown milkdown-link-edit > .link-edit {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-code-block .cm-editor {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.ͼo .cm-activeLineGutter {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.ͼo .cm-activeLine {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.cm-content {
-  padding-left: 0px !important;
-  padding-right: 0px !important;
-}
-
-.milkdown milkdown-code-block .list-wrapper {
-  @apply bg-gray-50  border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-code-block .language-list-item:hover {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.milkdown milkdown-code-block .tools .language-button {
-  @apply bg-gray-50 border border-gray-300 text-gray-900 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white;
-}
-
-.milkdown milkdown-code-block .tools .language-button:hover {
-  @apply bg-gray-200 dark:bg-gray-600;
-}
-
-.milkdown::selection {
-  background-color: #6b7280;
-}
-
-.ͼ4 .cm-line ::selection, .ͼ4 .cm-line::selection {
-  background-color: #6b7280 !important;
+#editor {
+  min-height: 20rem;
+  height: 42rem;
 }
 
 </style>

@@ -32,7 +32,10 @@ export interface PluginOptions {
 
     /**
      * When attachment is created, it will be linked to the resource, by storing id of the resource with editor in attachment resource.
+     * Here you define the field name where this id will be stored.
      * For example when RichEditor installed on description field of apartment resource, it will store id of apartment resource.
+     * 
+     * Why we force to store and ask for resource id if we already have record id? Because in amny use cases attachments resource is shared between multiple resources, and record id might be not be unique across resources, but resource id + record id will be always unique.
      */
     attachmentResourceIdFieldName: string; // e.g. 'apartment_resource_id',
   },
