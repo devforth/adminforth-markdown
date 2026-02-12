@@ -17,6 +17,15 @@ export default class MarkdownPlugin extends AdminForthPlugin {
     return pluginOptions.fieldName;
   }
 
+  // Placeholder for future Upload Plugin API integration.
+  // For now, treat all extracted URLs as plugin-owned public URLs.
+  isPluginPublicUrl(_url: string): boolean {
+    // todo: here we need to check that host name is same as upload plugin, probably create upload plugin endpoint
+    // should handle cases that user might define custom preview url
+    // and that local storage has no host name, here, the fact of luck of hostname might be used as 
+    return true;
+  }
+
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
     this.adminforth = adminforth;
     const column = resourceConfig.columns.find(c => c.name === this.options.fieldName);
@@ -137,14 +146,64 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         }
       };
 
+      const shouldTrackUrl = (url: string) => {
+        try {
+          return this.isPluginPublicUrl(url);
+        } catch (err) {
+          console.error('Error checking URL ownership', url, err);
+          return false;
+        }
+      };
+
+      const getKeyFromTrackedUrl = (rawUrl: string): string | null => {
+        const srcTrimmed = rawUrl.trim().replace(/^<|>$/g, '');
+        if (!srcTrimmed || srcTrimmed.startsWith('data:') || srcTrimmed.startsWith('javascript:')) {
+          return null;
+        }
+        if (!shouldTrackUrl(srcTrimmed)) {
+          return null;
+        }
+        const srcNoQuery = stripQueryAndHash(srcTrimmed);
+        const key = extractKeyFromUrl(srcNoQuery);
+        if (!key) {
+          return null;
+        }
+        return key;
+      };
+
+      const upsertMeta = (
+        byKey: Map<string, AttachmentMeta>,
+        key: string,
+        next: { alt?: string | null; title?: string | null }
+      ) => {
+        const existing = byKey.get(key);
+        if (!existing) {
+          byKey.set(key, {
+            key,
+            alt: next.alt ?? null,
+            title: next.title ?? null,
+          });
+          return;
+        }
+
+        if ((existing.alt === null || existing.alt === '') && next.alt !== undefined && next.alt !== null) {
+          existing.alt = next.alt;
+        }
+        if ((existing.title === null || existing.title === '') && next.title !== undefined && next.title !== null) {
+          existing.title = next.title;
+        }
+      };
+
       function getAttachmentMetas(markdown: string): AttachmentMeta[] {
         if (!markdown) {
           return [];
         }
 
-        // Minimal image syntax: ![alt](src) or ![alt](src "title") or ![alt](src 'title')
-        // We track external (http/https) and relative sources, but skip data: URLs.
+        // Markdown image syntax: ![alt](src) or ![alt](src "title") or ![alt](src 'title')
         const imageRegex = /!\[([^\]]*)\]\(\s*([^\s)]+)\s*(?:\s+(?:\"([^\"]*)\"|'([^']*)'))?\s*\)/g;
+
+        // HTML embedded media links.
+        const htmlSrcRegex = /<(?:source|video)\b[^>]*\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s"'=<>`]+))[^>]*>/gi;
 
         const byKey = new Map<string, AttachmentMeta>();
         for (const match of markdown.matchAll(imageRegex)) {
@@ -152,22 +211,26 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           const srcRaw = match[2];
           const titleRaw = (match[3] ?? match[4]) ?? null;
 
-          const srcTrimmed = srcRaw.trim().replace(/^<|>$/g, '');
-          if (!srcTrimmed || srcTrimmed.startsWith('data:')) {
-            continue;
-          }
-
-          const srcNoQuery = stripQueryAndHash(srcTrimmed);
-          const key = extractKeyFromUrl(srcNoQuery);
+          const key = getKeyFromTrackedUrl(srcRaw);
           if (!key) {
             continue;
           }
-          byKey.set(key, {
-            key,
+          upsertMeta(byKey, key, {
             alt: altRaw,
             title: titleRaw,
           });
         }
+
+        let srcMatch: RegExpExecArray | null;
+        while ((srcMatch = htmlSrcRegex.exec(markdown)) !== null) {
+          const srcRaw = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3] ?? '';
+          const key = getKeyFromTrackedUrl(srcRaw);
+          if (!key) {
+            continue;
+          }
+          upsertMeta(byKey, key, {});
+        }
+
         return [...byKey.values()];
       }
 

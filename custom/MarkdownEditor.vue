@@ -240,6 +240,8 @@ let removePasteListener: (() => void) | null = null;
 let removePasteListenerSecondary: (() => void) | null = null;
 let removeGlobalPasteListener: (() => void) | null = null;
 let removeGlobalKeydownListener: (() => void) | null = null;
+let removeDragOverListener: (() => void) | null = null;
+let removeDropListener: (() => void) | null = null;
 
 type MarkdownImageRef = {
   lineNumber: number;
@@ -387,6 +389,62 @@ function fileFromClipboardImage(blob: Blob): File {
   return new File([blob], filename, { type });
 }
 
+function escapeMarkdownLinkText(text: string): string {
+  return text.replace(/[\[\]\\]/g, '\\$&');
+}
+
+function showAdminforthError(message: string) {
+  const api = (window as any).adminforth;
+  if (api && typeof api.alert === 'function') {
+    api.alert({
+      message,
+      variant: 'danger',
+      timeout: 30,
+    });
+    return;
+  }
+  console.error('[adminforth-markdown]', message);
+}
+
+function extractErrorMessage(error: any): string {
+  if (!error) return 'Upload failed';
+  if (typeof error === 'string') return error;
+  if (typeof error?.error === 'string') return error.error;
+  if (typeof error?.message === 'string') return error.message;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Upload failed';
+  }
+}
+
+function markdownForUploadedFile(file: File, url: string): string {
+  if (file.type?.startsWith('image/')) {
+    return `![](${url})`;
+  }
+
+  if (file.type?.startsWith('video/')) {
+    const mediaType = file.type || 'video/mp4';
+    return `<video width="400">\n<!-- For gif-like videos use: <video width="400" autoplay loop muted playsinline> -->\n  <source src="${url}" type="${mediaType}">\n</video>`;
+  }
+
+  // alert that file cant be uploaded
+  showAdminforthError(`Uploaded file "${file.name}" is not an image or video and cannot be embedded. It has been uploaded and can be accessed at: ${url}`);
+}
+
+async function uploadFileAndGetMarkdownTag(file: File): Promise<string | undefined> {
+  try {
+    const url = await uploadFileToS3(file);
+    if (!url) return;
+    return markdownForUploadedFile(file, url);
+  } catch (error) {
+    const message = extractErrorMessage(error);
+    showAdminforthError(message);
+    console.error('[adminforth-markdown] upload failed', error);
+    return;
+  }
+}
+
 onMounted(async () => {
   if (!editorContainer.value) return;
   try {
@@ -433,6 +491,59 @@ onMounted(async () => {
       const noopPaste = () => {};
       domNode.addEventListener('paste', noopPaste, true);
       removePasteListener = () => domNode.removeEventListener('paste', noopPaste, true);
+
+      const onDragOver = (e: DragEvent) => {
+        if (!e.dataTransfer) return;
+        if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      };
+
+      const onDrop = async (e: DragEvent) => {
+        const dt = e.dataTransfer;
+        if (!dt) return;
+        if (!dt.files || !dt.files.length) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (!editor) return;
+        editor.focus();
+
+        const target = editor.getTargetAtClientPoint(e.clientX, e.clientY);
+        const dropPosition = target?.position || target?.range?.getStartPosition?.();
+        if (dropPosition) {
+          editor.setPosition(dropPosition);
+          editor.setSelection(new monaco.Selection(
+            dropPosition.lineNumber,
+            dropPosition.column,
+            dropPosition.lineNumber,
+            dropPosition.column,
+          ));
+        }
+
+        if (!props.meta?.uploadPluginInstanceId) {
+          const msg = 'uploadPluginInstanceId is missing; cannot upload dropped file.';
+          showAdminforthError(msg);
+          console.error('[adminforth-markdown]', msg);
+          return;
+        }
+
+        const markdownTags: string[] = [];
+        for (const file of Array.from(dt.files)) {
+          const tag = await uploadFileAndGetMarkdownTag(file);
+          if (tag) markdownTags.push(tag);
+        }
+
+        if (markdownTags.length) {
+          insertAtCursor(`${markdownTags.join('\n\n')}\n`);
+        }
+      };
+
+      domNode.addEventListener('dragover', onDragOver, true);
+      domNode.addEventListener('drop', onDrop, true);
+      removeDragOverListener = () => domNode.removeEventListener('dragover', onDragOver, true);
+      removeDropListener = () => domNode.removeEventListener('drop', onDrop, true);
     }
     if (editorContainer.value) {
       const noopPaste = () => {};
@@ -496,15 +607,9 @@ onMounted(async () => {
         const markdownTags: string[] = [];
         for (const blob of imageBlobs) {
           const file = blob instanceof File ? blob : fileFromClipboardImage(blob);
-          try {
-            const url = await uploadFileToS3(file);
-            debug('upload result', { url });
-            if (typeof url === 'string' && url.length) {
-              markdownTags.push(`![](${url})`);
-            }
-          } catch (err) {
-            console.error('[adminforth-markdown] upload failed', err);
-          }
+          const tag = await uploadFileAndGetMarkdownTag(file);
+          if (!tag) continue;
+          markdownTags.push(tag);
         }
 
         if (markdownTags.length) {
@@ -570,7 +675,7 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
   const originalFilename = file.name.split('.').slice(0, -1).join('.');
   const originalExtension = file.name.split('.').pop();
 
-  const { uploadUrl, tagline, previewUrl, s3Path, error } = await callAdminForthApi({
+  const { uploadUrl, tagline, previewUrl, error } = await callAdminForthApi({
     path: `/plugin/${props.meta.uploadPluginInstanceId}/get_file_upload_url`,
     method: 'POST',
     body: {
@@ -582,8 +687,13 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
   });
 
   if (error) {
-    console.error('Upload failed:', error);
-    return;
+    const message = extractErrorMessage(error);
+    if (/too\s*large|max\s*file\s*size|size\s*limit|limit\s*reached|exceed/i.test(message)) {
+      showAdminforthError(message);
+    } else {
+      showAdminforthError(message);
+    }
+    throw new Error(message);
   }
 
   const xhr = new XMLHttpRequest();
@@ -597,12 +707,16 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
       if (xhr.status === 200) {
         resolve(previewUrl as string);
       } else {
-        reject('Error uploading to S3');
+        const message = `Error uploading to S3 (status ${xhr.status})`;
+        showAdminforthError(message);
+        reject(message);
       }
     };
 
     xhr.onerror = () => {
-      reject('Error uploading to S3');
+      const message = 'Error uploading to S3';
+      showAdminforthError(message);
+      reject(message);
     };
   });
 }
@@ -626,6 +740,12 @@ onBeforeUnmount(() => {
 
   removeGlobalKeydownListener?.();
   removeGlobalKeydownListener = null;
+
+  removeDragOverListener?.();
+  removeDragOverListener = null;
+
+  removeDropListener?.();
+  removeDropListener = null;
 
   for (const d of disposables) d.dispose();
   disposables.length = 0;
