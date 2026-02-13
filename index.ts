@@ -194,6 +194,17 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         }
       };
 
+      const normalizeAttachmentTitleForDb = (title: string | null): string | null => {
+        // we can llow to use [xx] in titles, for some meta classes - so they will nto go to attachment titles, but will be available in the ending markdown
+        if (title === null) {
+          return null;
+        }
+        const cleaned = title
+          .replace(/\s*(?:\([^()]*\)|\[[^\[\]]*\])\s*$/, '')
+          .trim();
+        return cleaned || null;
+      };
+
       function getAttachmentMetas(markdown: string): AttachmentMeta[] {
         if (!markdown) {
           return [];
@@ -209,7 +220,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         for (const match of markdown.matchAll(imageRegex)) {
           const altRaw = match[1] ?? '';
           const srcRaw = match[2];
-          const titleRaw = (match[3] ?? match[4]) ?? null;
+          const titleRaw = normalizeAttachmentTitleForDb((match[3] ?? match[4]) ?? null);
 
           const key = getKeyFromTrackedUrl(srcRaw);
           if (!key) {
