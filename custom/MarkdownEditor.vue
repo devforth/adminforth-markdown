@@ -425,7 +425,7 @@ function markdownForUploadedFile(file: File, url: string): string {
 
   if (file.type?.startsWith('video/')) {
     const mediaType = file.type || 'video/mp4';
-    return `<video width="400">\n<!-- For gif-like videos use: <video width="400" autoplay loop muted playsinline> -->\n  <source src="${url}" type="${mediaType}">\n</video>`;
+    return `<figure>\n  <!-- For gif-like videos use: <video width="500" autoplay loop muted playsinline> -->\n  <video width="500" controls>\n    <source src="${url}" type="${mediaType}">\n  </video>\n  <figcaption>Demo</figcaption>\n</figure>`;
   }
 
   // alert that file cant be uploaded
