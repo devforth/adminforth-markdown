@@ -18,6 +18,7 @@ import { callAdminForthApi } from '@/utils';
 import * as monaco from 'monaco-editor';
 import TurndownService from 'turndown';
 import { gfm, tables } from 'turndown-plugin-gfm';
+import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
 
 const props = defineProps<{
   column: any,
@@ -233,55 +234,6 @@ function getTurndownService(): TurndownService {
   return turndownService;
 }
 
-function toggleWrap(ed: monaco.editor.IStandaloneCodeEditor, left: string, right = left) {
-  const m = ed.getModel();
-  if (!m) return;
-
-  const selections = ed.getSelections() || [];
-  if (!selections.length) return;
-
-  const edits: monaco.editor.IIdentifiedSingleEditOperation[] = [];
-  const nextSelections: monaco.Selection[] = [];
-
-  for (const sel of selections) {
-    const text = m.getValueInRange(sel);
-
-    if (sel.isEmpty()) {
-      edits.push({ range: sel, text: `${left}${right}` });
-      const pos = sel.getStartPosition();
-      const col = pos.column + left.length;
-      nextSelections.push(new monaco.Selection(pos.lineNumber, col, pos.lineNumber, col));
-      continue;
-    }
-
-    const isWrapped = text.startsWith(left) && text.endsWith(right) && text.length >= left.length + right.length;
-
-    if (isWrapped) {
-      const unwrapped = text.slice(left.length, text.length - right.length);
-      edits.push({ range: sel, text: unwrapped });
-
-      const start = sel.getStartPosition();
-      nextSelections.push(new monaco.Selection(start.lineNumber, start.column, start.lineNumber, start.column + unwrapped.length));
-    } else {
-      edits.push({ range: sel, text: `${left}${text}${right}` });
-
-      const start = sel.getStartPosition();
-      nextSelections.push(
-        new monaco.Selection(
-          start.lineNumber,
-          start.column + left.length,
-          start.lineNumber,
-          start.column + left.length + text.length,
-        ),
-      );
-    }
-  }
-
-  ed.pushUndoStop();
-  ed.executeEdits('md-format', edits);
-  ed.pushUndoStop();
-  ed.setSelections(nextSelections);
-}
 
 let editor: monaco.editor.IStandaloneCodeEditor | null = null;
 let model: monaco.editor.ITextModel | null = null;
@@ -514,22 +466,26 @@ onMounted(async () => {
       },
       scrollBeyondLastColumn: 0,
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI, () => {
-      toggleWrap(editor!, '*');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
+      toggleWrapSmart(editor!, '**');
     });
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
-      toggleWrap(editor!, '**');
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyI, () => {
+      toggleWrapSmart(editor!, '*');
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
-      toggleWrap(editor!, '<u>', '</u>');
-    });
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyE, () => {
-      toggleWrap(editor!, '`');
+      toggleWrapSmart(editor!, '`');
     });
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Shift | monaco.KeyCode.KeyX, () => {
-      toggleWrap(editor!, '~~');
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyX, () => {
+      toggleWrapSmart(editor!, '~~');
     });
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
+      toggleWrapSmart(editor!, '<u>', '</u>');
+    });
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
       const selection = editor!.getSelection();
       if (!selection) return;
@@ -538,6 +494,7 @@ onMounted(async () => {
       const markdownLink = `[${escaped}](url)`;
       editor!.executeEdits('insert-link', [{ range: selection, text: markdownLink, forceMoveMarkers: true }]);
     });
+
     debug('Monaco editor created', {
       hasUploadPluginInstanceId: Boolean(props.meta?.uploadPluginInstanceId),
     });
