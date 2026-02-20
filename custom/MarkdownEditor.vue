@@ -755,7 +755,7 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
     return;
   }
 
-  const originalFilename = file.name.split('.').slice(0, -1).join('.');
+  const originalFilename = file.name.split('.').slice(0, -1).join('.') + `_${Date.now()}`;
   const originalExtension = file.name.split('.').pop();
 
   const { uploadUrl, tagline, previewUrl, error } = await callAdminForthApi({
