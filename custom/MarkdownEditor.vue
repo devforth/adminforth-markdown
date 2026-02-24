@@ -447,6 +447,50 @@ async function uploadFileAndGetMarkdownTag(file: File): Promise<string | undefin
     return;
   }
 }
+function getSelectedPlainText(): string {
+  if (!editor || !model) return '';
+
+  const sels = editor.getSelections() || [];
+  if (!sels.length) return '';
+  return sels
+    .map((sel) => model!.getValueInRange(sel))
+    .join('\n');
+}
+
+const onEditorCopy = (e: ClipboardEvent) => {
+  if (!editor || !model) return;
+  if (!e.clipboardData) return;
+
+  if (!(editor.hasTextFocus?.() || isFocused.value)) return;
+
+  const text = getSelectedPlainText();
+  if (!text) return;
+
+  e.clipboardData.setData('text/plain', text);
+  e.clipboardData.setData('text/html', '');
+  e.preventDefault();
+  e.stopPropagation();
+};
+
+const onEditorCut = (e: ClipboardEvent) => {
+  if (!editor || !model) return;
+  if (!e.clipboardData) return;
+  if (!(editor.hasTextFocus?.() || isFocused.value)) return;
+
+  const text = getSelectedPlainText();
+  if (!text) return;
+
+  e.clipboardData.setData('text/plain', text);
+  e.clipboardData.setData('text/html', '');
+  e.preventDefault();
+  e.stopPropagation();
+
+  const sels = editor.getSelections() || [];
+  editor.executeEdits(
+    'cut',
+    sels.map((range) => ({ range, text: '' })),
+  );
+};
 
 onMounted(async () => {
   if (!editorContainer.value) return;
@@ -577,7 +621,8 @@ onMounted(async () => {
           insertAtCursor(`${markdownTags.join('\n\n')}\n`);
         }
       };
-
+      domNode.addEventListener('copy', onEditorCopy, true);
+      domNode.addEventListener('cut', onEditorCut, true);
       domNode.addEventListener('dragover', onDragOver, true);
       domNode.addEventListener('drop', onDrop, true);
       removeDragOverListener = () => domNode.removeEventListener('dragover', onDragOver, true);
