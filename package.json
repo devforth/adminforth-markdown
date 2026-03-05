@@ -6,8 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc && rsync -av --exclude 'node_modules' custom dist/",
-    "prepare": "npm link adminforth"
+    "build": "tsc && rsync -av --exclude 'node_modules' custom dist/"
   },
   "publishConfig": {
     "access": "public"
@@ -29,7 +28,7 @@
     "url": "https://github.com/devforth/adminforth-markdown.git"
   },
   "peerDependencies": {
-    "adminforth": "next"
+    "adminforth": "^2.24.0"
   },
   "release": {
     "plugins": [
@@ -40,6 +39,7 @@
       [
         "semantic-release-slack-bot",
         {
+          "packageName": "@adminforth/markdown",
           "notifyOnSuccess": true,
           "notifyOnFail": true,
           "slackIcon": ":package:",
