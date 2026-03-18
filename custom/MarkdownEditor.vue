@@ -533,24 +533,16 @@ const applyFormat = (type: string) => {
   };
 
   const handleWrap = (wrap: string, endWrap?: string) => {
-    const end = endWrap || wrap;
-    const isSingleAsterisk = wrap === '*' && end === '*';
-    const isBoldLike = isSingleAsterisk && selectedText.startsWith('**') && selectedText.endsWith('**') && selectedText.length >= 4;
-    if (selectedText.startsWith(wrap) && selectedText.endsWith(end) && !(isSingleAsterisk && isBoldLike)) {
-      const newText = selectedText.substring(wrap.length, selectedText.length - end.length);
-      applyEdits('unwrap', [{ range: selection, text: newText, forceMoveMarkers: true }]);
-    } else {
-      toggleWrapSmart(editor!, wrap, endWrap);
-    }
-  };
+    toggleWrapSmart(editor!, wrap, endWrap);
+   };
 
   const handleCodeBlock = () => {
     const trimmed = selectedText.trim();
     const match = trimmed.match(/^(`{3,})[^\n]*\n([\s\S]*)\n\1$/);
 
     if (match) {
-      const content = match[2];
-      applyEdits('unwrap-code', [{ range: selection, text: content, forceMoveMarkers: true }]);
+      const codeContent = match[2];
+      applyEdits('unwrap-code', [{ range: selection, text: codeContent, forceMoveMarkers: true }]);
     } else {
       const fence = fenceForCodeBlock(selectedText);
       const insertText = `\n${fence}\n${selectedText}\n${fence}\n`;
@@ -572,7 +564,7 @@ const applyFormat = (type: string) => {
     if (match) {
       applyEdits('unlink', [{ range: selection, text: match[1], forceMoveMarkers: true }]);
     } else {
-      const textToInsert = selectedText || '';
+      const textToInsert = escapeMarkdownLinkText(selectedText || '');
       const newText = `[${textToInsert}](url)`;
       
       applyEdits('insert-link', [{ range: selection, text: newText, forceMoveMarkers: true }]);
