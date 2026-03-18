@@ -1,25 +1,25 @@
 <template>
   <div class="mb-2 w-full flex flex-col">
     <div class="flex flex-wrap items-center gap-3 p-1.5 border border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800 w-full box-border ">
-      <button type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
-      <button type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold" aria-label="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
+      <button type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic" aria-label="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline" aria-label="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough" aria-label="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
       
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
-      <button type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
-      
+      <button type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2" aria-label="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3" aria-label="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
+
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
       
-      <button type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List" aria-label="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List" aria-label="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
       
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
-      <button type="button" @click="applyFormat('link')" :class="btnClass" title="Link"><IconLinkOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('code')" :class="btnClass" title="Code"><IconCodeOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('link')" :class="btnClass" title="Link" aria-label="Link"><IconLinkOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('code')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
     </div>
 
     <div
@@ -51,7 +51,7 @@ const props = defineProps<{
   meta: any,
 }>()
 
-const btnClass = "flex items-center justify-center h-8 px-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors duration-200";
+const btnClass = 'flex items-center justify-center h-8 px-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors duration-200';
 
 const emit = defineEmits(['update:value']);
 const editorContainer = ref<HTMLElement | null>(null);
@@ -523,8 +523,9 @@ const applyFormat = (type: string) => {
   if (!editor || !model) return;
   editor.focus();
 
-  const selection = editor.getSelection();
-  if (!selection) return;
+  const rawSelection = editor.getSelection();
+  if (!rawSelection) return;
+  const selection = rawSelection.startLineNumber !== rawSelection.endLineNumber && rawSelection.endColumn === 1 ? new monaco.Selection(rawSelection.startLineNumber, rawSelection.startColumn, rawSelection.endLineNumber - 1, model.getLineMaxColumn(rawSelection.endLineNumber - 1),) : rawSelection;
   const selectedText = model.getValueInRange(selection);
 
   const applyEdits = (id: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]) => {
@@ -543,11 +544,13 @@ const applyFormat = (type: string) => {
 
   const handleCodeBlock = () => {
     const trimmed = selectedText.trim();
-    if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
-      const content = trimmed.split('\n').slice(1, -1).join('\n');
+    const match = trimmed.match(/^(`{3,})[^\n]*\n([\s\S]*)\n\1$/);
+    if (match) {
+      const content = match[2];
       applyEdits('unwrap-code', [{ range: selection, text: content, forceMoveMarkers: true }]);
     } else {
-      applyEdits('wrap-code', [{ range: selection, text: `\n\`\`\`\n${selectedText}\n\`\`\`\n`, forceMoveMarkers: true }]);
+      const fence = fenceForCodeBlock(selectedText);
+      applyEdits('wrap-code', [{ range: selection, text: `\n${fence}\n${selectedText}\n${fence}\n`, forceMoveMarkers: true }]);
     }
   };
 
