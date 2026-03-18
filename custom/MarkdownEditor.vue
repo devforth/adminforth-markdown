@@ -19,7 +19,7 @@
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
       <button type="button" @click="applyFormat('link')" :class="btnClass" title="Link" aria-label="Link"><IconLinkOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('code')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
+      <button type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
     </div>
 
     <div
@@ -42,7 +42,7 @@ import * as monaco from 'monaco-editor';
 import TurndownService from 'turndown';
 import { gfm, tables } from 'turndown-plugin-gfm';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
-import { IconLinkOutline, IconCodeOutline, IconRectangleListOutline, IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, IconLetterItalicOutline, IconTextSlashOutline} from '@iconify-prerendered/vue-flowbite';
+import { IconLinkOutline, IconCodeOutline, IconRectangleListOutline, IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, IconLetterItalicOutline, IconTextSlashOutline } from '@iconify-prerendered/vue-flowbite';
 import { IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
 
 const props = defineProps<{
@@ -534,7 +534,9 @@ const applyFormat = (type: string) => {
 
   const handleWrap = (wrap: string, endWrap?: string) => {
     const end = endWrap || wrap;
-    if (selectedText.startsWith(wrap) && selectedText.endsWith(end)) {
+    const isSingleAsterisk = wrap === '*' && end === '*';
+    const isBoldLike = isSingleAsterisk && selectedText.startsWith('**') && selectedText.endsWith('**') && selectedText.length >= 4;
+    if (selectedText.startsWith(wrap) && selectedText.endsWith(end) && !(isSingleAsterisk && isBoldLike)) {
       const newText = selectedText.substring(wrap.length, selectedText.length - end.length);
       applyEdits('unwrap', [{ range: selection, text: newText, forceMoveMarkers: true }]);
     } else {
@@ -572,12 +574,12 @@ const applyFormat = (type: string) => {
     for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
       const line = model!.getLineContent(i);
       const targetPrefix = formatType === 'ol' ? `${olCounter++}. ` : prefixMap[formatType];
-      const match = line.match(/^(#{1,3}\s|\*\s|\d+\.\s)/);
+      const match = line.match(/^(#{1,6}\s+|[*+-]\s+|\d+[.)]\s+)/);
 
       if (match) {
         const existing = match[0];
         const newText = (existing === targetPrefix) ? '' : targetPrefix;
-        edits.push({ range: new monaco.Range(i, 1, i, existing.length + 1), text: newText, forceMoveMarkers: true });
+        edits.push({ range: new monaco.Range(i, 1, i, existing.length), text: newText, forceMoveMarkers: true });
       } else {
         edits.push({ range: new monaco.Range(i, 1, i, 1), text: targetPrefix, forceMoveMarkers: true });
       }
@@ -590,7 +592,7 @@ const applyFormat = (type: string) => {
     case 'italic':    handleWrap('*'); break;
     case 'strike':    handleWrap('~~'); break;
     case 'underline': handleWrap('<u>', '</u>'); break;
-    case 'code':      handleCodeBlock(); break;
+    case 'codeBlock': handleCodeBlock(); break;
     case 'link':      handleLink(); break;
     case 'h2': 
     case 'h3': 
