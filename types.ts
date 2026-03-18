@@ -54,6 +54,21 @@ export interface PluginOptions {
     attachmentAltFieldName?: string; // e.g. 'alt',
   },
 
+  /**
+    * Optional configuration for the editor's top toolbar (formatting panel).
+    *
+    * If `topPanelSettings` is omitted, the editor uses its internal default
+    * toolbar configuration.
+    *
+    * If `topPanelSettings` is provided as an empty object, all controls behave
+    * as if their flags were `undefined`, i.e. they also fall back to the same
+    * internal defaults.
+    *
+    * For each flag below:
+    * - `true`  – explicitly enable/show the control in the top panel.
+    * - `false` – explicitly disable/hide the control.
+    * - `undefined` – use the editor's default behavior for that control.
+    */
   topPanelSettings?: {
     bold?: boolean;
     italic?: boolean;

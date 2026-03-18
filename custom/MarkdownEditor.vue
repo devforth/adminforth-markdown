@@ -2,24 +2,25 @@
   <div class="mb-2 w-full flex flex-col">
     <div class="flex flex-wrap items-center gap-3 p-1.5 border border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800 w-full box-border ">
       
-      <button v-if="isBtnVisible('bold')" type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
-      <button v-if="isBtnVisible('italic')" type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('underline')" type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('strike')" type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('bold')" type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold" aria-label="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
+      <button v-if="isBtnVisible('italic')" type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic" aria-label="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('underline')" type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline" aria-label="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('strike')" type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough" aria-label="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
       
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
-      <button v-if="isBtnVisible('h1')" type="button" @click="applyFormat('h1')" :class="btnClass" title="Heading 1"><IconH116Solid class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('h2')" type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('h3')" type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h1')" type="button" @click="applyFormat('h1')" :class="btnClass" title="Heading 1" aria-label="Heading 1"><IconH116Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h2')" type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2" aria-label="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h3')" type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3" aria-label="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
 
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
       
-      <button v-if="isBtnVisible('ul')" type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('ol')" type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('ul')" type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List" aria-label="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('ol')" type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List" aria-label="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
       
-      <button v-if="isBtnVisible('link')" type="button" @click="applyFormat('link')" :class="btnClass" title="Link"><IconLinkOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('codeBlock')" type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code"><IconCodeOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('link')" type="button" @click="applyFormat('link')" :class="btnClass" title="Link" aria-label="Link"><IconLinkOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('codeBlock')" type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
+    
     </div>
 
     <div
@@ -661,12 +662,23 @@ onMounted(async () => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
       toggleWrapSmart(editor!, '<u>', '</u>');
     });
-    editor.addCommand(monaco.KeyCode.Enter, () => {
-      const pos = editor!.getPosition()!;
-      const line = model!.getLineContent(pos.lineNumber);
-      const match = line.match(/^(\s*)([*+-]|\d+\.)\s+/);
+    
+    disposables.push(
+      editor.onKeyDown((e) => {
+        if (e.keyCode !== monaco.KeyCode.Enter) {
+          return;
+        }
+        const pos = editor!.getPosition();
+        if (!pos) {
+          return;
+        }
+        const line = model!.getLineContent(pos.lineNumber);
+        const match = line.match(/^(\s*)([*+-]|\d+\.)\s+/);
+        if (!match) {
+          return;
+        }
+        e.preventDefault();
 
-      if (match) {
         if (line.trim() === match[2].trim()) {
           const range = new monaco.Range(pos.lineNumber, 1, pos.lineNumber, line.length + 1);
           editor!.executeEdits('exit-list', [{ range, text: '', forceMoveMarkers: true }]);
@@ -675,10 +687,8 @@ onMounted(async () => {
           const next = isNum ? `${parseInt(match[2]) + 1}. ` : `${match[2]} `;
           editor!.trigger('keyboard', 'type', { text: `\n${match[1]}${next}` });
         }
-      } else {
-        editor!.trigger('keyboard', 'type', { text: '\n' });
-      }
-    }, 'editorTextFocus');
+      }),
+    );
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
       const selection = editor!.getSelection();
