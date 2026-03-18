@@ -129,22 +129,22 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
     const topPanelSettings = this.options.topPanelSettings || {};
 
-      const commonMeta = {
-        pluginInstanceId: this.pluginInstanceId,
-        columnName: fieldName,
-        uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
-        topPanelSettings: topPanelSettings, 
-      };
+    const commonMeta = {
+      pluginInstanceId: this.pluginInstanceId,
+      columnName: fieldName,
+      uploadPluginInstanceId: this.uploadPlugin?.pluginInstanceId,
+      topPanelSettings: topPanelSettings, 
+    };
 
-      column.components.edit = {
-        file: this.componentPath("MarkdownEditor.vue"),
-        meta: commonMeta,
-      };
+    column.components.edit = {
+      file: this.componentPath("MarkdownEditor.vue"),
+      meta: commonMeta,
+    };
       
-      column.components.create = {
-        file: this.componentPath("MarkdownEditor.vue"),
-        meta: commonMeta,
-      };
+    column.components.create = {
+      file: this.componentPath("MarkdownEditor.vue"),
+      meta: commonMeta,
+    };
 
     const editorRecordPkField = resourceConfig.columns.find(c => c.primaryKey);
     if (this.options.attachments) {
