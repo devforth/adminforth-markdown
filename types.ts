@@ -53,4 +53,18 @@ export interface PluginOptions {
      */
     attachmentAltFieldName?: string; // e.g. 'alt',
   },
+
+  topPanelSettings?: {
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strike?: boolean;
+    h1?: boolean;
+    h2?: boolean;
+    h3?: boolean;
+    ul?: boolean;
+    ol?: boolean;
+    link?: boolean;
+    codeBlock?: boolean;
+  };
 }

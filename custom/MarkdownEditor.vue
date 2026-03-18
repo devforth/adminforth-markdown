@@ -1,25 +1,25 @@
 <template>
   <div class="mb-2 w-full flex flex-col">
     <div class="flex flex-wrap items-center gap-3 p-1.5 border border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800 w-full box-border ">
-      <button type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold" aria-label="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
-      <button type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic" aria-label="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline" aria-label="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough" aria-label="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
+      
+      <button v-if="isBtnVisible('bold')" type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
+      <button v-if="isBtnVisible('italic')" type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('underline')" type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('strike')" type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
       
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
 
-      <button type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2" aria-label="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3" aria-label="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h1')" type="button" @click="applyFormat('h1')" :class="btnClass" title="Heading 1"><IconH116Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h2')" type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('h3')" type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
 
       <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
       
-      <button type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List" aria-label="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List" aria-label="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('ul')" type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('ol')" type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
       
-      <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-
-      <button type="button" @click="applyFormat('link')" :class="btnClass" title="Link" aria-label="Link"><IconLinkOutline class="w-5 h-5" /></button>
-      <button type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('link')" type="button" @click="applyFormat('link')" :class="btnClass" title="Link"><IconLinkOutline class="w-5 h-5" /></button>
+      <button v-if="isBtnVisible('codeBlock')" type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code"><IconCodeOutline class="w-5 h-5" /></button>
     </div>
 
     <div
@@ -43,13 +43,20 @@ import TurndownService from 'turndown';
 import { gfm, tables } from 'turndown-plugin-gfm';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
 import { IconLinkOutline, IconCodeOutline, IconRectangleListOutline, IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, IconLetterItalicOutline, IconTextSlashOutline } from '@iconify-prerendered/vue-flowbite';
-import { IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
+import { IconH116Solid, IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
 
 const props = defineProps<{
   column: any,
   record: any,
   meta: any,
 }>()
+
+const isBtnVisible = (btnKey: string) => {
+  const settings = props.meta.topPanelSettings;
+  if (!settings || Object.keys(settings).length === 0) return true;
+  if (settings[btnKey] !== undefined) return settings[btnKey];
+  return true; 
+};
 
 const btnClass = 'flex items-center justify-center h-8 px-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors duration-200';
 
@@ -578,7 +585,7 @@ const applyFormat = (type: string) => {
   };
 
   const handleBlockFormat = (formatType: string) => {
-    const prefixMap: Record<string, string> = { h2: '## ', h3: '### ', ul: '* ' };
+    const prefixMap: Record<string, string> = { h1: '# ', h2: '## ', h3: '### ', ul: '* ' };
     const edits: monaco.editor.IIdentifiedSingleEditOperation[] = [];
 
     for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
@@ -608,6 +615,7 @@ const applyFormat = (type: string) => {
     case 'underline': handleWrap('<u>', '</u>'); break;
     case 'codeBlock': handleCodeBlock(); break;
     case 'link':      handleLink(); break;
+    case 'h1':
     case 'h2': 
     case 'h3': 
     case 'ul': 
