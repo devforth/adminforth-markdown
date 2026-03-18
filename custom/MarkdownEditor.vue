@@ -653,6 +653,24 @@ onMounted(async () => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
       toggleWrapSmart(editor!, '<u>', '</u>');
     });
+    editor.addCommand(monaco.KeyCode.Enter, () => {
+      const pos = editor!.getPosition()!;
+      const line = model!.getLineContent(pos.lineNumber);
+      const match = line.match(/^(\s*)([*+-]|\d+\.)\s+/);
+
+      if (match) {
+        if (line.trim() === match[2].trim()) {
+          const range = new monaco.Range(pos.lineNumber, 1, pos.lineNumber, line.length + 1);
+          editor!.executeEdits('exit-list', [{ range, text: '', forceMoveMarkers: true }]);
+        } else {
+          const isNum = match[2].includes('.');
+          const next = isNum ? `${parseInt(match[2]) + 1}. ` : `${match[2]} `;
+          editor!.trigger('keyboard', 'type', { text: `\n${match[1]}${next}` });
+        }
+      } else {
+        editor!.trigger('keyboard', 'type', { text: '\n' });
+      }
+    }, 'editorTextFocus');
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
       const selection = editor!.getSelection();
