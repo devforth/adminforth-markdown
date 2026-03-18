@@ -547,22 +547,41 @@ const applyFormat = (type: string) => {
   const handleCodeBlock = () => {
     const trimmed = selectedText.trim();
     const match = trimmed.match(/^(`{3,})[^\n]*\n([\s\S]*)\n\1$/);
+
     if (match) {
       const content = match[2];
       applyEdits('unwrap-code', [{ range: selection, text: content, forceMoveMarkers: true }]);
     } else {
       const fence = fenceForCodeBlock(selectedText);
-      applyEdits('wrap-code', [{ range: selection, text: `\n${fence}\n${selectedText}\n${fence}\n`, forceMoveMarkers: true }]);
+      const insertText = `\n${fence}\n${selectedText}\n${fence}\n`;
+      
+      applyEdits('wrap-code', [{ range: selection, text: insertText, forceMoveMarkers: true }]);
+
+      const startLine = selection.startLineNumber;
+      const addedLines = insertText.split('\n').length - 1;
+      const endLine = startLine + addedLines;
+      
+      editor!.setSelection(new monaco.Selection(startLine, 1, endLine, model!.getLineMaxColumn(endLine)));
     }
   };
 
   const handleLink = () => {
-    const match = selectedText.match(/^\[(.*?)\]\(.*?\)$/);
+    const trimmed = selectedText.trim();
+    const match = trimmed.match(/^\[(.*?)\]\(.*?\)$/);
+
     if (match) {
       applyEdits('unlink', [{ range: selection, text: match[1], forceMoveMarkers: true }]);
     } else {
-      const text = selectedText || 'text';
-      applyEdits('insert-link', [{ range: selection, text: `[${escapeMarkdownLinkText(text)}](url)`, forceMoveMarkers: true }]);
+      const textToInsert = selectedText || '';
+      const newText = `[${textToInsert}](url)`;
+      
+      applyEdits('insert-link', [{ range: selection, text: newText, forceMoveMarkers: true }]);
+
+      const line = selection.startLineNumber;
+      const startCol = selection.startColumn;
+      const endCol = startCol + newText.length;
+      
+      editor!.setSelection(new monaco.Selection(line, startCol, line, endCol));
     }
   };
 
