@@ -569,17 +569,20 @@ const applyFormat = (type: string) => {
   const handleBlockFormat = (formatType: string) => {
     const prefixMap: Record<string, string> = { h2: '## ', h3: '### ', ul: '* ' };
     const edits: monaco.editor.IIdentifiedSingleEditOperation[] = [];
-    let olCounter = 1;
 
     for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
       const line = model!.getLineContent(i);
-      const targetPrefix = formatType === 'ol' ? `${olCounter++}. ` : prefixMap[formatType];
+      const targetPrefix = formatType === 'ol' ? `${i - selection.startLineNumber + 1}. ` : prefixMap[formatType];
       const match = line.match(/^(#{1,6}\s+|[*+-]\s+|\d+[.)]\s+)/);
 
       if (match) {
         const existing = match[0];
-        const newText = (existing === targetPrefix) ? '' : targetPrefix;
-        edits.push({ range: new monaco.Range(i, 1, i, existing.length), text: newText, forceMoveMarkers: true });
+        if (existing.trim() === targetPrefix.trim()) {
+          edits.push({ range: new monaco.Range(i, 1, i, existing.length + 1), text: '', forceMoveMarkers: true 
+          });
+        } else {
+          edits.push({ range: new monaco.Range(i, 1, i, existing.length + 1), text: targetPrefix, forceMoveMarkers: true });
+        }
       } else {
         edits.push({ range: new monaco.Range(i, 1, i, 1), text: targetPrefix, forceMoveMarkers: true });
       }
