@@ -332,7 +332,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           })
         }))
       }
-      
+
       const updateAttachmentRecordsMetadata = async (
         adminforth: IAdminForth,
         options: PluginOptions,
