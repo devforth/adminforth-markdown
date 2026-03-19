@@ -21,8 +21,6 @@ import * as monaco from 'monaco-editor';
 import TurndownService from 'turndown';
 import { gfm, tables } from 'turndown-plugin-gfm';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
-import { IconLinkOutline, IconCodeOutline, IconRectangleListOutline, IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, IconLetterItalicOutline, IconTextSlashOutline } from '@iconify-prerendered/vue-flowbite';
-import { IconH116Solid, IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
 import TopPanelButtons from './topPanelButtons.vue';
 
 const props = defineProps<{
