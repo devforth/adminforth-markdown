@@ -1,28 +1,6 @@
 <template>
   <div class="mb-2 w-full flex flex-col">
-    <div class="flex flex-wrap items-center gap-3 p-1.5 border border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800 w-full box-border ">
-      
-      <button v-if="isBtnVisible('bold')" type="button" @click="applyFormat('bold')" :class="btnClass" title="Bold" aria-label="Bold"><IconLetterBoldOutline class="w-5 h-5" /></button> 
-      <button v-if="isBtnVisible('italic')" type="button" @click="applyFormat('italic')" :class="btnClass" title="Italic" aria-label="Italic"><IconLetterItalicOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('underline')" type="button" @click="applyFormat('underline')" :class="btnClass" title="Underline" aria-label="Underline"><IconLetterUnderlineOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('strike')" type="button" @click="applyFormat('strike')" :class="btnClass" title="Strikethrough" aria-label="Strikethrough"><IconTextSlashOutline class="w-5 h-5" /></button>
-      
-      <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-
-      <button v-if="isBtnVisible('h1')" type="button" @click="applyFormat('h1')" :class="btnClass" title="Heading 1" aria-label="Heading 1"><IconH116Solid class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('h2')" type="button" @click="applyFormat('h2')" :class="btnClass" title="Heading 2" aria-label="Heading 2"><IconH216Solid class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('h3')" type="button" @click="applyFormat('h3')" :class="btnClass" title="Heading 3" aria-label="Heading 3"><IconH316Solid class="w-5 h-5" /></button>
-
-      <div class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
-      
-      <button v-if="isBtnVisible('ul')" type="button" @click="applyFormat('ul')" :class="btnClass" title="Bulleted List" aria-label="Bulleted List"><IconRectangleListOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('ol')" type="button" @click="applyFormat('ol')" :class="btnClass" title="Numbered List" aria-label="Numbered List"><IconOrderedListOutline class="w-5 h-5" /></button>
-      
-      <button v-if="isBtnVisible('link')" type="button" @click="applyFormat('link')" :class="btnClass" title="Link" aria-label="Link"><IconLinkOutline class="w-5 h-5" /></button>
-      <button v-if="isBtnVisible('codeBlock')" type="button" @click="applyFormat('codeBlock')" :class="btnClass" title="Code" aria-label="Code"><IconCodeOutline class="w-5 h-5" /></button>
-    
-    </div>
-
+    <TopPanelButtons :editor="editor" :meta="meta" />
     <div
       ref="editorContainer"
       id="editor"
@@ -45,21 +23,13 @@ import { gfm, tables } from 'turndown-plugin-gfm';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
 import { IconLinkOutline, IconCodeOutline, IconRectangleListOutline, IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, IconLetterItalicOutline, IconTextSlashOutline } from '@iconify-prerendered/vue-flowbite';
 import { IconH116Solid, IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
+import TopPanelButtons from './topPanelButtons.vue';
 
 const props = defineProps<{
   column: any,
   record: any,
   meta: any,
 }>()
-
-const isBtnVisible = (btnKey: string) => {
-  const settings = props.meta.topPanelSettings;
-  if (!settings || Object.keys(settings).length === 0) return true;
-  if (settings[btnKey] !== undefined) return settings[btnKey];
-  return true; 
-};
-
-const btnClass = 'flex items-center justify-center h-8 px-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors duration-200';
 
 const emit = defineEmits(['update:value']);
 const editorContainer = ref<HTMLElement | null>(null);
@@ -526,104 +496,6 @@ const onEditorCut = (e: ClipboardEvent) => {
     sels.map((range) => ({ range, text: '' })),
   );
 };
-
-const applyFormat = (type: string) => {
-  if (!editor || !model) return;
-  editor.focus();
-
-  const rawSelection = editor.getSelection();
-  if (!rawSelection) return;
-  const selection = rawSelection.startLineNumber !== rawSelection.endLineNumber && rawSelection.endColumn === 1 ? new monaco.Selection(rawSelection.startLineNumber, rawSelection.startColumn, rawSelection.endLineNumber - 1, model.getLineMaxColumn(rawSelection.endLineNumber - 1),) : rawSelection;
-  const selectedText = model.getValueInRange(selection);
-
-  const applyEdits = (id: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]) => {
-    editor!.executeEdits(id, edits);
-  };
-
-  const handleWrap = (wrap: string, endWrap?: string) => {
-    toggleWrapSmart(editor!, wrap, endWrap);
-   };
-
-  const handleCodeBlock = () => {
-    const trimmed = selectedText.trim();
-    const match = trimmed.match(/^(`{3,})[^\n]*\n([\s\S]*)\n\1$/);
-
-    if (match) {
-      const codeContent = match[2];
-      applyEdits('unwrap-code', [{ range: selection, text: codeContent, forceMoveMarkers: true }]);
-    } else {
-      const fence = fenceForCodeBlock(selectedText);
-      const insertText = `\n${fence}\n${selectedText}\n${fence}\n`;
-      
-      applyEdits('wrap-code', [{ range: selection, text: insertText, forceMoveMarkers: true }]);
-
-      const startLine = selection.startLineNumber;
-      const addedLines = insertText.split('\n').length - 1;
-      const endLine = startLine + addedLines;
-      
-      editor!.setSelection(new monaco.Selection(startLine, 1, endLine, model!.getLineMaxColumn(endLine)));
-    }
-  };
-
-  const handleLink = () => {
-    const trimmed = selectedText.trim();
-    const match = trimmed.match(/^\[(.*?)\]\(.*?\)$/);
-
-    if (match) {
-      applyEdits('unlink', [{ range: selection, text: match[1], forceMoveMarkers: true }]);
-    } else {
-      const textToInsert = escapeMarkdownLinkText(selectedText || '');
-      const newText = `[${textToInsert}](url)`;
-      
-      applyEdits('insert-link', [{ range: selection, text: newText, forceMoveMarkers: true }]);
-
-      const line = selection.startLineNumber;
-      const startCol = selection.startColumn;
-      const endCol = startCol + newText.length;
-      
-      editor!.setSelection(new monaco.Selection(line, startCol, line, endCol));
-    }
-  };
-
-  const handleBlockFormat = (formatType: string) => {
-    const prefixMap: Record<string, string> = { h1: '# ', h2: '## ', h3: '### ', ul: '* ' };
-    const edits: monaco.editor.IIdentifiedSingleEditOperation[] = [];
-
-    for (let i = selection.startLineNumber; i <= selection.endLineNumber; i++) {
-      const line = model!.getLineContent(i);
-      const targetPrefix = formatType === 'ol' ? `${i - selection.startLineNumber + 1}. ` : prefixMap[formatType];
-      const match = line.match(/^(#{1,6}\s+|[*+-]\s+|\d+[.)]\s+)/);
-
-      if (match) {
-        const existing = match[0];
-        if (existing.trim() === targetPrefix.trim()) {
-          edits.push({ range: new monaco.Range(i, 1, i, existing.length + 1), text: '', forceMoveMarkers: true 
-          });
-        } else {
-          edits.push({ range: new monaco.Range(i, 1, i, existing.length + 1), text: targetPrefix, forceMoveMarkers: true });
-        }
-      } else {
-        edits.push({ range: new monaco.Range(i, 1, i, 1), text: targetPrefix, forceMoveMarkers: true });
-      }
-    }
-    applyEdits('format-block', edits);
-  };
-
-  switch (type) {
-    case 'bold':      handleWrap('**'); break;
-    case 'italic':    handleWrap('*'); break;
-    case 'strike':    handleWrap('~~'); break;
-    case 'underline': handleWrap('<u>', '</u>'); break;
-    case 'codeBlock': handleCodeBlock(); break;
-    case 'link':      handleLink(); break;
-    case 'h1':
-    case 'h2': 
-    case 'h3': 
-    case 'ul': 
-    case 'ol':        handleBlockFormat(type); break;
-  }
-};
-
 
 onMounted(async () => {
   if (!editorContainer.value) return;
