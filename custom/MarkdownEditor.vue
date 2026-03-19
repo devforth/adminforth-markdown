@@ -1,15 +1,17 @@
 <template>
-  <div class="mb-2"></div>
-  <div
-    ref="editorContainer"
-    id="editor"
-    :class="[
-      'text-sm rounded-lg block w-full transition-all box-border overflow-hidden',
-      isFocused
-        ? 'ring-1 ring-lightPrimary border ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary'
-        : 'border border-gray-300 dark:border-gray-600',
-    ]"
-  ></div>
+  <div class="mb-2 w-full flex flex-col">
+    <TopPanelButtons :editor="editor" :meta="meta" />
+    <div
+      ref="editorContainer"
+      id="editor"
+      :class="[
+        'text-sm block w-full transition-all box-border overflow-hidden rounded-b-lg border border-t-0 pt-3',
+        isFocused
+          ? 'ring-1 ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary'
+          : 'border-gray-300 dark:border-gray-600',
+      ]"
+    ></div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -19,6 +21,7 @@ import * as monaco from 'monaco-editor';
 import TurndownService from 'turndown';
 import { gfm, tables } from 'turndown-plugin-gfm';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
+import TopPanelButtons from './topPanelButtons.vue';
 
 const props = defineProps<{
   column: any,
@@ -529,6 +532,33 @@ onMounted(async () => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyU, () => {
       toggleWrapSmart(editor!, '<u>', '</u>');
     });
+    
+    disposables.push(
+      editor.onKeyDown((e) => {
+        if (e.keyCode !== monaco.KeyCode.Enter) {
+          return;
+        }
+        const pos = editor!.getPosition();
+        if (!pos) {
+          return;
+        }
+        const line = model!.getLineContent(pos.lineNumber);
+        const match = line.match(/^(\s*)([*+-]|\d+\.)\s+/);
+        if (!match) {
+          return;
+        }
+        e.preventDefault();
+
+        if (line.trim() === match[2].trim()) {
+          const range = new monaco.Range(pos.lineNumber, 1, pos.lineNumber, line.length + 1);
+          editor!.executeEdits('exit-list', [{ range, text: '', forceMoveMarkers: true }]);
+        } else {
+          const isNum = match[2].includes('.');
+          const next = isNum ? `${parseInt(match[2]) + 1}. ` : `${match[2]} `;
+          editor!.trigger('keyboard', 'type', { text: `\n${match[1]}${next}` });
+        }
+      }),
+    );
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
       const selection = editor!.getSelection();
