@@ -4,6 +4,7 @@
       class="prose
          prose-p:my-0
          prose-headings:my-0
+         prose-h1:text-[1.6rem]
          prose-ul:my-0
          prose-ol:my-0
          prose-li:my-0
