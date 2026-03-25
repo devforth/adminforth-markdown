@@ -188,7 +188,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         if (!key) {
           return null;
         }
-        return key;
+        return decodeURIComponent(key);
       };
 
       const upsertMeta = (
