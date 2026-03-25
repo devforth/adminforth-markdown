@@ -1,5 +1,17 @@
 <template>
-    <div v-html="purifiedHtml" class="prose"></div>
+    <div 
+      v-html="purifiedHtml"   
+      class="prose
+         prose-p:my-0
+         prose-headings:my-0
+         prose-ul:my-0
+         prose-ol:my-0
+         prose-li:my-0
+         prose-pre:my-0
+         prose-hr:my-1
+         leading-tight
+         "
+      ></div>
   </template>
   
   <script setup lang="ts">
