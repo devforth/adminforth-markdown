@@ -19,11 +19,19 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
   // Placeholder for future Upload Plugin API integration.
   // For now, treat all extracted URLs as plugin-owned public URLs.
-  isPluginPublicUrl(_url: string): boolean {
-    // todo: here we need to check that host name is same as upload plugin, probably create upload plugin endpoint
-    // should handle cases that user might define custom preview url
-    // and that local storage has no host name, here, the fact of luck of hostname might be used as 
-    return true;
+  async isPluginPublicUrl(url: string): Promise<boolean> {
+    if (!this.uploadPlugin) return false;
+    try {
+      const uploadPlugin = this.uploadPlugin as any;
+      if (typeof uploadPlugin.isInternalUrl === 'function') {
+        return await uploadPlugin.isInternalUrl(url);
+      } else {
+        throw new Error ('Please update upload plugin and storage adapter')
+      }
+    } catch (err) {
+      console.error(`[MarkdownPlugin] Error checking URL ${url}:`, err);
+    }
+    return false;
   }
 
   validateConfigAfterDiscover(adminforth: IAdminForth, resourceConfig: AdminForthResource) {
@@ -175,9 +183,13 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         }
       };
 
-      const getKeyFromTrackedUrl = (rawUrl: string): string | null => {
+      const getKeyFromTrackedUrl = async (rawUrl: string): Promise<string | null> => {
         const srcTrimmed = rawUrl.trim().replace(/^<|>$/g, '');
         if (!srcTrimmed || srcTrimmed.startsWith('data:') || srcTrimmed.startsWith('javascript:')) {
+          return null;
+        }
+        const isInternal = await this.isPluginPublicUrl(srcTrimmed);
+        if (!isInternal) {
           return null;
         }
         if (!shouldTrackUrl(srcTrimmed)) {
@@ -225,7 +237,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         return cleaned || null;
       };
 
-      function getAttachmentMetas(markdown: string): AttachmentMeta[] {
+      async function getAttachmentMetas(markdown: string): AttachmentMeta[] {
         if (!markdown) {
           return [];
         }
@@ -242,7 +254,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           const srcRaw = match[2];
           const titleRaw = normalizeAttachmentTitleForDb((match[3] ?? match[4]) ?? null);
 
-          const key = getKeyFromTrackedUrl(srcRaw);
+          const key = await getKeyFromTrackedUrl(srcRaw);
           if (!key) {
             continue;
           }
@@ -255,7 +267,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         let srcMatch: RegExpExecArray | null;
         while ((srcMatch = htmlSrcRegex.exec(markdown)) !== null) {
           const srcRaw = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3] ?? '';
-          const key = getKeyFromTrackedUrl(srcRaw);
+          const key = await getKeyFromTrackedUrl(srcRaw);
           if (!key) {
             continue;
           }
@@ -390,7 +402,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       
       (resourceConfig.hooks.create.afterSave).push(async ({ record, adminUser }: { record: any, adminUser: AdminUser }) => {
         // find all s3Paths in the html
-        const metas = getAttachmentMetas(record[this.options.fieldName]);
+        const metas = await getAttachmentMetas(record[this.options.fieldName]);
         const keys = metas.map(m => m.key);
         process.env.HEAVY_DEBUG && console.log('📸 Found attachment keys', keys);
         // create attachment records
@@ -416,7 +428,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           ]);
           const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
 
-          const metas = getAttachmentMetas(record[this.options.fieldName]);
+          const metas = await getAttachmentMetas(record[this.options.fieldName]);
           const newKeys = metas.map(m => m.key);
 
           process.env.HEAVY_DEBUG && console.log('📸 Existing keys (from db)', existingKeys)
