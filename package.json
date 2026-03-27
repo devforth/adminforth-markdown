@@ -54,8 +54,5 @@
         "prerelease": true
       }
     ]
-  },
-  "dependencies": {
-    "@iconify-prerendered/vue-heroicons": "^0.28.1721921294"
   }
 }
