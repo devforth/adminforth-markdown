@@ -11,8 +11,14 @@
          prose-pre:my-0
          prose-hr:my-1
          leading-tight
-         "
-      ></div>
+         dark: dark:text-gray-300
+         dark:[&_h1]:text-white dark:[&_h2]:text-gray-100 dark:[&_h3]:text-gray-200
+         dark:[&_a]:text-white dark:[&_a:hover]:text-white
+         dark:[&_pre]:bg-black dark:[&_pre]:border dark:[&_border-slate-800]
+         dark:[&_strong]:text-white
+         dark:[&_em]:text-gray-400
+         dark:[&_del]:text-gray-600">
+      </div>
   </template>
   
   <script setup lang="ts">
