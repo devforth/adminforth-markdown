@@ -237,7 +237,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         return cleaned || null;
       };
 
-      async function getAttachmentMetas(markdown: string): AttachmentMeta[] {
+      async function getAttachmentMetas(markdown: string): Promise<AttachmentMeta[]> {
         if (!markdown) {
           return [];
         }
