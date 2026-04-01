@@ -12,6 +12,10 @@
          prose-hr:my-1
          leading-tight
          dark: dark:text-gray-300
+         dark:[&_th]:text-white
+         dark:[&_td]:text-white
+         dark:[&_thead]:border-b-gray-600
+         dark:[&_code]:text-white
          dark:[&_h1]:text-white dark:[&_h2]:text-gray-100 dark:[&_h3]:text-gray-200
          dark:[&_a]:text-white dark:[&_a:hover]:text-white
          dark:[&_pre]:bg-black dark:[&_pre]:border dark:[&_border-slate-800]
