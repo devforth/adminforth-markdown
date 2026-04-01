@@ -19,7 +19,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
   // Placeholder for future Upload Plugin API integration.
   // For now, treat all extracted URLs as plugin-owned public URLs.
-  async isPluginPublicUrl(url: string): Promise<boolean> {
+  async isUrlFromPlugin(url: string): Promise<boolean> {
     if (!this.uploadPlugin) return false;
     try {
       const uploadPlugin = this.uploadPlugin as any;
@@ -176,7 +176,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
       const shouldTrackUrl = (url: string) => {
         try {
-          return this.isPluginPublicUrl(url);
+          return this.isUrlFromPlugin(url);
         } catch (err) {
           console.error('Error checking URL ownership', url, err);
           return false;
@@ -188,7 +188,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         if (!srcTrimmed || srcTrimmed.startsWith('data:') || srcTrimmed.startsWith('javascript:')) {
           return null;
         }
-        const isInternal = await this.isPluginPublicUrl(srcTrimmed);
+        const isInternal = await this.isUrlFromPlugin(srcTrimmed);
         if (!isInternal) {
           return null;
         }
