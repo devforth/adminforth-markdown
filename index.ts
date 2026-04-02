@@ -162,7 +162,14 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           return u.pathname.replace(/^\/+/, '');
         } catch {
           // Fallback: strip scheme/host if it looks like a URL, otherwise treat as a path.
-          return stripQueryAndHash(url).replace(/^https?:\/\/[^\/]+\/+/, '').replace(/^\/+/, '');
+          const key = stripQueryAndHash(url).replace(/^https?:\/\/[^\/]+\/+/, '').replace(/^\/+/, '');
+
+          // since only local storage adapter returns non-URL paths
+          // we need to cut-off express-base
+          // e.g. /uploaded-static/cars_description_images-74bbe25a154500c4a2fcb91fb91cea75/sqlite/images_1775114133312.webp
+          // should become /sqlite/images_1775114133312.webp
+          const cutted = key.split("/").filter(Boolean).slice(2).join("/");
+          return cutted;
         }
       };
 
