@@ -106,6 +106,8 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
+        compactShowPreview: this.options.compactShowPreview ?? true,
+        maxShowViewContainerHeightPx: this.options.maxShowViewContainerHeightPx,
       },
     };
 
@@ -114,6 +116,8 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: {
         pluginInstanceId: this.pluginInstanceId,
         columnName: fieldName,
+        compactShowPreview: this.options.compactShowPreview ?? true,
+        maxShowViewContainerHeightPx: this.options.maxShowViewContainerHeightPx,
       },
     };
 

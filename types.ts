@@ -82,4 +82,16 @@ export interface PluginOptions {
     link?: boolean;
     codeBlock?: boolean;
   };
+
+  /**
+   * When true, the preview will be shown in a compact mode with a "Show more" button if the content exceeds the specified max height.
+   * This allows users to expand and collapse the preview as needed, improving readability for long content.
+   * Default is true.
+   */
+  compactShowPreview?: boolean;
+  /**
+   * Maximum height in pixels for the preview container when `compactShowPreview` is enabled.
+   * If the content exceeds this height, a "Show more" button will appear to allow users to expand the preview.
+   */
+  maxShowViewContainerHeightPx?: number;
 }
