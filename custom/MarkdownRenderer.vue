@@ -76,6 +76,7 @@ import DOMPurify from "dompurify";
         prose-h2:text-[1.1rem]
         prose-h3:text-[1rem]
         prose-p:text-sm
+        prose-p:leading-[1.5]
         prose-ul:text-sm
         prose-blockquote:my-0
       `
