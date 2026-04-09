@@ -17,7 +17,7 @@
            prose-pre:my-0
            prose-hr:my-1
            prose-table:my-0
-           leading-none
+           leading-[1.5]
            dark: dark:text-gray-300
            dark:[&_th]:text-white
            dark:[&_td]:text-white
@@ -28,7 +28,13 @@
            dark:[&_pre]:bg-black dark:[&_pre]:border dark:[&_border-slate-800]
            dark:[&_strong]:text-white
            dark:[&_em]:text-gray-400
-           dark:[&_del]:text-gray-600"
+           dark:[&_del]:text-gray-600
+           proose-hr:leading-none
+           text-lightShowTableBodyText
+           dark:text-darkShowTableBodyText
+           prose-p:text-lightShowTableBodyText
+           dark:prose-p:text-darkShowTableBodyText
+           "
            :class="compactPreviewStyles"
       ></div>
     </div>
@@ -63,12 +69,14 @@ import DOMPurify from "dompurify";
         prose-ul:leading-[0.2]
         prose-ol:leading-[0.2]
         prose-li:leading-[1]
-        prose-h1:leading-none
-        prose-h2:leading-none
-        prose-h3:leading-none
-        prose-h1:text-[1.3rem]
-        prose-h2:text-[1.2rem]
-        prose-h3:text-[1.1rem]
+        prose-h1:leading-[1]
+        prose-h2:leading-[1]
+        prose-h3:leading-[1]
+        prose-h1:text-[1.2rem]
+        prose-h2:text-[1.1rem]
+        prose-h3:text-[1rem]
+        prose-p:text-sm
+        prose-ul:text-sm
         prose-blockquote:my-0
       `
     } else {
