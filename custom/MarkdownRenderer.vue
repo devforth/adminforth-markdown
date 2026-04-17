@@ -19,17 +19,32 @@
            prose-table:my-0
            leading-[1.5]
            dark: dark:text-gray-300
-           dark:[&_th]:text-white
-           dark:[&_td]:text-white
+           dark:[&_th]:text-darkShowTableBodyText
+           dark:[&_td]:text-darkShowTableBodyText
            dark:[&_thead]:border-b-gray-600
-           dark:[&_code]:text-white
-           dark:[&_h1]:text-white dark:[&_h2]:text-gray-100 dark:[&_h3]:text-gray-200
-           dark:[&_a]:text-white dark:[&_a:hover]:text-white
-           dark:[&_pre]:bg-black dark:[&_pre]:border dark:[&_border-slate-800]
+           dark:[&_code]:text-darkShowTableBodyText
+           dark:[&_h1]:text-darkShowTableBodyText
+           dark:[&_h2]:text-darkShowTableBodyText
+           dark:[&_h3]:text-darkShowTableBodyText
+           dark:[&_strong]:text-darkShowTableBodyText
+           dark:[&_a]:text-white 
+           dark:[&_a:hover]:text-white
+           dark:[&_pre]:bg-black 
+           dark:[&_pre]:border 
+           dark:[&_border-slate-800]
            dark:[&_strong]:text-white
            dark:[&_em]:text-gray-400
            dark:[&_del]:text-gray-600
-           proose-hr:leading-none
+           prose-h1:text-lightShowTableBodyText
+           prose-h2:text-lightShowTableBodyText
+           prose-h3:text-lightShowTableBodyText
+           prose-ul:text-lightShowTableBodyText
+           prose-ol:text-lightShowTableBodyText
+           prose-th:text-lightShowTableBodyText
+           prose-td:text-lightShowTableBodyText
+           prose-thead:border-b-lightShowTableBodyText
+           prose-strong:text-lightShowTableBodyText
+           prose-hr:leading-none
            text-lightShowTableBodyText
            dark:text-darkShowTableBodyText
            prose-p:text-lightShowTableBodyText
