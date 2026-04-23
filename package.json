@@ -16,7 +16,7 @@
     "adminforth",
     "markdown"
   ],
-  "author": "devforth",
+  "author": "DevForth (https://devforth.io)",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^22.10.7",
