@@ -1,7 +1,31 @@
 # AdminForth Markdown Plugin
 
-<img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /> <img src="https://woodpecker.devforth.io/api/badges/3848/status.svg" alt="Build Status" /> <a href="https://www.npmjs.com/package/@adminforth/markdown"> <img src="https://img.shields.io/npm/dt/@adminforth/markdown" alt="npm downloads" /> </a> <a href="https://www.npmjs.com/package/@adminforth/markdown"> <img src="https://img.shields.io/npm/v/@adminforth/markdown" alt="npm version" /> </a>
+<img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /> <img src="https://woodpecker.devforth.io/api/badges/3848/status.svg" alt="Build Status" /> <a href="https://www.npmjs.com/package/@adminforth/markdown"><img src="https://img.shields.io/npm/dm/@adminforth/markdown" alt="npm downloads" /></a> <a href="https://www.npmjs.com/package/@adminforth/markdown"><img src="https://img.shields.io/npm/v/@adminforth/markdown" alt="npm version" /></a>
+
+[![Ask AI](https://tluma.ai/badge)](https://tluma.ai/ask-ai/devforth/adminforth)
 
 Enables Markdown editing capabilities in AdminForth applications using Monaco Editor.
 
-## For usage, see [AdminForth Markdown Documentation](https://adminforth.dev/docs/tutorial/Plugins/markdown/)
+## Features
+
+- Add Markdown editing to AdminForth applications.
+- Use Monaco Editor for a better authoring experience.
+- Support formatted content workflows in the admin panel.
+- Integrate Markdown fields into existing resources.
+
+## Documentation
+
+Full setup and configuration guide:
+
+[AdminForth Markdown Documentation](https://adminforth.dev/docs/tutorial/Plugins/markdown/)
+
+## About AdminForth
+
+AdminForth is an open-source, agent-first admin framework for building robust admin panels and back-office applications faster.
+
+## Related links
+
+- [AdminForth website](https://adminforth.dev)
+- [npm package](https://www.npmjs.com/package/@adminforth/markdown)
+- [More AdminForth plugins](https://adminforth.dev/docs/tutorial/ListOfPlugins/)
+- [Built by DevForth](https://devforth.io)
