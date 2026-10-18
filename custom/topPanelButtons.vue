@@ -3,12 +3,11 @@ import { markRaw } from 'vue';
 import * as monaco from 'monaco-editor';
 import { toggleWrapSmart } from './utils/monacoMarkdownToggle';
 
-import { 
-  IconLinkOutline, IconCodeOutline, IconRectangleListOutline, 
-  IconOrderedListOutline, IconLetterBoldOutline, IconLetterUnderlineOutline, 
-  IconLetterItalicOutline, IconTextSlashOutline 
-} from '@iconify-prerendered/vue-flowbite';
-import { IconH116Solid, IconH216Solid, IconH316Solid } from '@iconify-prerendered/vue-heroicons';
+import {
+  IconBold, IconItalic, IconUnderline, IconStrikethrough, IconHeading1, IconHeading2, IconHeading3,
+  IconList, IconListOrdered, IconLink, IconSquareCode,
+} from '@iconify-prerendered/vue-lucide';
+import { Button } from '@/afcl';
 
 const props = defineProps<{
   editor: monaco.editor.IStandaloneCodeEditor | null;
@@ -20,8 +19,6 @@ const isBtnVisible = (btnKey: string) => {
   if (!settings || Object.keys(settings).length === 0) return true;
   return settings[btnKey] !== undefined ? settings[btnKey] : true;
 };
-
-const btnClass = 'flex items-center justify-center h-8 px-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 transition-colors duration-200';
 
 const fenceForCodeBlock = (text: string): string => {
   let maxBackticks = 0;
@@ -99,33 +96,36 @@ const applyFormat = (type: string) => {
 };
 
 const buttons = [
-  { id: 'bold', title: 'Bold', icon: markRaw(IconLetterBoldOutline), group: 1 },
-  { id: 'italic', title: 'Italic', icon: markRaw(IconLetterItalicOutline), group: 1 },
-  { id: 'underline', title: 'Underline', icon: markRaw(IconLetterUnderlineOutline), group: 1 },
-  { id: 'strike', title: 'Strike', icon: markRaw(IconTextSlashOutline), group: 1, separator: true },
-  { id: 'h1', title: 'H1', icon: markRaw(IconH116Solid), group: 2 },
-  { id: 'h2', title: 'H2', icon: markRaw(IconH216Solid), group: 2 },
-  { id: 'h3', title: 'H3', icon: markRaw(IconH316Solid), group: 2, separator: true },
-  { id: 'ul', title: 'UL', icon: markRaw(IconRectangleListOutline), group: 3 },
-  { id: 'ol', title: 'OL', icon: markRaw(IconOrderedListOutline), group: 3 },
-  { id: 'link', title: 'Link', icon: markRaw(IconLinkOutline), group: 3 },
-  { id: 'codeBlock', title: 'Code', icon: markRaw(IconCodeOutline), group: 3 },
+  { id: 'bold', title: 'Bold', icon: markRaw(IconBold), group: 1 },
+  { id: 'italic', title: 'Italic', icon: markRaw(IconItalic), group: 1 },
+  { id: 'underline', title: 'Underline', icon: markRaw(IconUnderline), group: 1 },
+  { id: 'strike', title: 'Strikethrough', icon: markRaw(IconStrikethrough), group: 1, separator: true },
+  { id: 'h1', title: 'Heading 1', icon: markRaw(IconHeading1), group: 2 },
+  { id: 'h2', title: 'Heading 2', icon: markRaw(IconHeading2), group: 2 },
+  { id: 'h3', title: 'Heading 3', icon: markRaw(IconHeading3), group: 2, separator: true },
+  { id: 'ul', title: 'Bulleted list', icon: markRaw(IconList), group: 3 },
+  { id: 'ol', title: 'Numbered list', icon: markRaw(IconListOrdered), group: 3 },
+  { id: 'link', title: 'Link', icon: markRaw(IconLink), group: 3 },
+  { id: 'codeBlock', title: 'Code block', icon: markRaw(IconSquareCode), group: 3 },
 ];
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-3 p-1.5 border border-gray-300 dark:border-gray-600 rounded-t-lg bg-gray-50 dark:bg-gray-800 w-full box-border">
+  <div class="af-markdown-toolbar flex flex-wrap items-center gap-0.5 px-1.5 py-1 border-b border-lightInputBorder dark:border-darkInputBorder w-full box-border">
     <template v-for="btn in buttons" :key="btn.id">
-      <button 
-        v-if="isBtnVisible(btn.id)" 
-        type="button" 
-        @click="applyFormat(btn.id)" 
-        :class="btnClass" 
-        :title="btn.title"
+      <Button
+        v-if="isBtnVisible(btn.id)"
+        type="button"
+        variant="ghost"
+        size="sm"
+        iconOnly
+        :title="$t(btn.title)"
+        :aria-label="$t(btn.title)"
+        @click="applyFormat(btn.id)"
       >
-        <component :is="btn.icon" class="w-5 h-5" />
-      </button>
-      <div v-if="btn.separator && isBtnVisible(btn.id)" class="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1"></div>
+        <component :is="btn.icon" />
+      </Button>
+      <div v-if="btn.separator && isBtnVisible(btn.id)" class="w-px h-4 mx-1.5 bg-lightInputBorder dark:bg-darkInputBorder"></div>
     </template>
   </div>
 </template>

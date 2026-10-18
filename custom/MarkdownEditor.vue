@@ -1,21 +1,25 @@
 <template>
-  <div class="mb-2 w-full flex flex-col">
+  <!-- the toolbar and the text share one frame, it gets the focus ring of inputs -->
+  <div
+    class="af-markdown-editor mb-2 w-full flex flex-col rounded-default border shadow-customLight transition-[border-color,box-shadow]
+      bg-lightInputBackground dark:bg-darkInputBackground"
+    :class="isFocused
+      ? 'border-lightInputFocusBorder ring-[3px] ring-lightInputFocusRing dark:border-darkInputFocusBorder dark:ring-darkInputFocusRing'
+      : 'border-lightInputBorder hover:border-lightInputBorderHover dark:border-darkInputBorder dark:hover:border-darkInputBorderHover'"
+  >
     <TopPanelButtons :editor="editor" :meta="meta" />
+    <!-- font-mono gives Monaco the mono font of the theme -->
     <div
       ref="editorContainer"
       id="editor"
-      :class="[
-        'text-sm block w-full transition-all box-border overflow-hidden rounded-b-lg border border-t-0 pt-3',
-        isFocused
-          ? 'ring-1 ring-lightPrimary border-lightPrimary dark:ring-darkPrimary dark:border-darkPrimary'
-          : 'border-gray-300 dark:border-gray-600',
-      ]"
+      class="font-mono text-sm block w-full box-border overflow-hidden rounded-b-default"
     ></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { useCoreStore } from '@/stores/core';
 import { callAdminForthApi } from '@/utils';
 import * as monaco from 'monaco-editor';
 import TurndownService from 'turndown';
@@ -371,8 +375,30 @@ function scheduleImagePreviewUpdate() {
   }, 120);
 }
 
-function isDarkMode(): boolean {
-  return document.documentElement.classList.contains('dark');
+// the editor grows with its text, so a short text does not cover the page; a long one scrolls inside
+const MIN_HEIGHT_PX = 160;
+const MAX_HEIGHT_PX = 672;
+
+// transparent editor backgrounds let the input background of the theme show through
+const MONACO_THEME_COLORS = {
+  'editor.background': '#00000000',
+  'editorGutter.background': '#00000000',
+  'editor.lineHighlightBorder': '#00000000',
+};
+monaco.editor.defineTheme('af-light', { base: 'vs', inherit: true, rules: [], colors: MONACO_THEME_COLORS });
+monaco.editor.defineTheme('af-dark', { base: 'vs-dark', inherit: true, rules: [], colors: MONACO_THEME_COLORS });
+
+const coreStore = useCoreStore();
+
+function monacoTheme() {
+  return coreStore.theme === 'dark' ? 'af-dark' : 'af-light';
+}
+
+watch(() => coreStore.theme, () => monaco.editor.setTheme(monacoTheme()));
+
+function fitHeight() {
+  const height = Math.min(MAX_HEIGHT_PX, Math.max(MIN_HEIGHT_PX, editor!.getContentHeight()));
+  editorContainer.value!.style.height = `${height}px`;
 }
 
 function insertAtCursor(text: string) {
@@ -498,7 +524,7 @@ const onEditorCut = (e: ClipboardEvent) => {
 onMounted(async () => {
   if (!editorContainer.value) return;
   try {
-    monaco.editor.setTheme(isDarkMode() ? 'vs-dark' : 'vs');
+    monaco.editor.setTheme(monacoTheme());
 
     model = monaco.editor.createModel(content.value, 'markdown');
     editor = monaco.editor.create(editorContainer.value, {
@@ -508,11 +534,33 @@ onMounted(async () => {
       wordWrap: 'on',
       wrappingStrategy: 'advanced',
       wrappingIndent: 'same',
+      // a form field, not a code editor: no line numbers, minimap, folding or current line box
+      lineNumbers: 'off',
+      glyphMargin: false,
+      folding: false,
+      lineDecorationsWidth: 12,
+      minimap: { enabled: false },
+      renderLineHighlight: 'none',
+      overviewRulerLanes: 0,
+      overviewRulerBorder: false,
+      hideCursorInOverviewRuler: true,
+      padding: { top: 10, bottom: 10 },
+      fontFamily: getComputedStyle(editorContainer.value).fontFamily,
+      fontSize: 13,
+      lineHeight: 20,
+      scrollBeyondLastLine: false,
       scrollbar: {
         horizontal: 'hidden',
+        verticalScrollbarSize: 8,
+        // at the top or the bottom of the text the wheel scrolls the page instead of being swallowed
+        alwaysConsumeMouseWheel: false,
       },
       scrollBeyondLastColumn: 0,
     });
+    disposables.push(editor.onDidContentSizeChange(fitHeight));
+    fitHeight();
+    // Monaco measures the font once, a web font which loads later needs a new measurement
+    document.fonts.ready.then(() => monaco.editor.remeasureFonts());
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyB, () => {
       toggleWrapSmart(editor!, '**');
     });
@@ -869,12 +917,3 @@ onBeforeUnmount(() => {
   model = null;
 });
 </script>
-
-<style lang="scss">
-
-#editor {
-  min-height: 20rem;
-  height: 42rem;
-}
-
-</style>

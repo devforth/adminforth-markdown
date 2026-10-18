@@ -18,23 +18,23 @@
            prose-hr:my-1
            prose-table:my-0
            leading-[1.5]
-           dark: dark:text-gray-300
            dark:[&_th]:text-darkShowTableBodyText
            dark:[&_td]:text-darkShowTableBodyText
-           dark:[&_thead]:border-b-gray-600
+           [&_thead]:border-b-lightInputBorder
+           dark:[&_thead]:border-b-darkInputBorder
            dark:[&_code]:text-darkShowTableBodyText
            dark:[&_h1]:text-darkShowTableBodyText
            dark:[&_h2]:text-darkShowTableBodyText
            dark:[&_h3]:text-darkShowTableBodyText
            dark:[&_strong]:text-darkShowTableBodyText
-           dark:[&_a]:text-white 
-           dark:[&_a:hover]:text-white
-           dark:[&_pre]:bg-black 
-           dark:[&_pre]:border 
-           dark:[&_border-slate-800]
-           dark:[&_strong]:text-white
-           dark:[&_em]:text-gray-400
-           dark:[&_del]:text-gray-600
+           [&_a]:text-lightPrimary
+           dark:[&_a]:text-darkPrimary
+           [&_pre]:bg-lightSecondaryDarken
+           [&_pre]:text-lightInputText
+           dark:[&_pre]:bg-darkSecondaryLighten
+           dark:[&_pre]:text-darkInputText
+           [&_del]:text-lightInputIconColor
+           dark:[&_del]:text-darkInputIconColor
            prose-h1:text-lightShowTableBodyText
            prose-h2:text-lightShowTableBodyText
            prose-h3:text-lightShowTableBodyText
@@ -42,7 +42,6 @@
            prose-ol:text-lightShowTableBodyText
            prose-th:text-lightShowTableBodyText
            prose-td:text-lightShowTableBodyText
-           prose-thead:border-b-lightShowTableBodyText
            prose-strong:text-lightShowTableBodyText
            prose-hr:leading-none
            text-lightShowTableBodyText
@@ -56,9 +55,10 @@
     <button
       v-if="isOverflowing || expanded"
       @click="expanded = !expanded"
-      class="mt-1 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium focus:outline-none hover:underline"
+      type="button"
+      class="af-markdown-show-more mt-1 text-sm font-medium text-lightPrimary underline decoration-lightPrimary/30 underline-offset-[3px] hover:decoration-lightPrimary dark:text-darkPrimary dark:decoration-darkPrimary/40 dark:hover:decoration-darkPrimary"
     >
-      {{ expanded ? 'Show less' : 'Show more' }}
+      {{ expanded ? $t('Show less') : $t('Show more') }}
     </button>
   </div>
 </template>
