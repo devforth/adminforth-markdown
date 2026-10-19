@@ -404,7 +404,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           await adminforth.updateResourceRecord({
             resource: this.attachmentResource,
             recordId: a[attachmentPrimaryKeyField.name],
-            record: patch,
+            updates: patch,
             oldRecord: a,
             adminUser,
           });
@@ -426,10 +426,10 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       // after edit we need to delete attachments that are not in the html anymore
       // and add new ones
       (resourceConfig.hooks.edit.afterSave).push(
-        async ({ recordId, record, adminUser }: { recordId: any, record: any, adminUser: AdminUser }) => {
-          process.env.HEAVY_DEBUG && console.log('⚓ Cought hook', recordId, 'rec', record);
-          if (record[this.options.fieldName] === undefined) {
-            console.log('⚓ Cought hook', recordId, 'rec', record);
+        async ({ recordId, updates, adminUser }: { recordId: any, updates: any, adminUser: AdminUser }) => {
+          process.env.HEAVY_DEBUG && console.log('⚓ Cought hook', recordId, 'updates', updates);
+          if (updates[this.options.fieldName] === undefined) {
+            console.log('⚓ Cought hook', recordId, 'updates', updates);
             // field was not changed, do nothing
             return { ok: true };
           }
@@ -439,7 +439,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           ]);
           const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
 
-          const metas = await getAttachmentMetas(record[this.options.fieldName]);
+          const metas = await getAttachmentMetas(updates[this.options.fieldName]);
           const newKeys = metas.map(m => m.key);
 
           process.env.HEAVY_DEBUG && console.log('📸 Existing keys (from db)', existingKeys)
