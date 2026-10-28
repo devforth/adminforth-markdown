@@ -836,7 +836,7 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
   const originalFilename = file.name.split('.').slice(0, -1).join('.') + `_${Date.now()}`;
   const originalExtension = file.name.split('.').pop();
 
-  const { uploadUrl, tagline, previewUrl, error } = await callAdminForthApi({
+  const { uploadUrl, tagline, previewUrl, error, contentType: uploadContentType } = await callAdminForthApi({
     path: `/plugin/${props.meta.uploadPluginInstanceId}/get_file_upload_url`,
     method: 'POST',
     body: {
@@ -859,7 +859,7 @@ async function uploadFileToS3(file: File): Promise<string | undefined> {
 
   const xhr = new XMLHttpRequest();
   xhr.open('PUT', uploadUrl, true);
-  xhr.setRequestHeader('Content-Type', file.type);
+  xhr.setRequestHeader('Content-Type', uploadContentType || file.type);
   xhr.setRequestHeader('x-amz-tagging', tagline);
   xhr.send(file);
 
