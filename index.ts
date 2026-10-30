@@ -315,11 +315,9 @@ export default class MarkdownPlugin extends AdminForthPlugin {
                 recordToCreate[options.attachments.attachmentAltFieldName] = meta.alt;
               }
 
-              await adminforth.createResourceRecord({
-                resource: this.attachmentResource,
-                record: recordToCreate,
-                adminUser,
-              });
+              await adminforth.resource(this.attachmentResource.resourceId)
+                .asSystem({ adminUser })
+                .create(recordToCreate);
             } catch (err) {
               console.error('Error creating record for', meta.key, err);
             }
@@ -347,12 +345,13 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         ]);
 
         await Promise.all(attachments.map(async (a: any) => {
-          await adminforth.deleteResourceRecord({
-            resource: this.attachmentResource,
-            recordId: a[attachmentPrimaryKeyField.name],
-            adminUser,
-            record: a,
-          })
+          try {
+            await adminforth.resource(this.attachmentResource.resourceId)
+              .asSystem({ adminUser, record: a })
+              .delete(a[attachmentPrimaryKeyField.name]);
+          } catch (err) {
+            console.error('Error deleting attachment record', a[attachmentPrimaryKeyField.name], err);
+          }
         }))
       }
 
@@ -401,13 +400,9 @@ export default class MarkdownPlugin extends AdminForthPlugin {
             return;
           }
 
-          await adminforth.updateResourceRecord({
-            resource: this.attachmentResource,
-            recordId: a[attachmentPrimaryKeyField.name],
-            updates: patch,
-            oldRecord: a,
-            adminUser,
-          });
+          await adminforth.resource(this.attachmentResource.resourceId)
+            .asSystem({ adminUser, oldRecord: a })
+            .update(a[attachmentPrimaryKeyField.name], patch);
         }));
       }
       
