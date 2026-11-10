@@ -1,12 +1,16 @@
 import { AdminForthPlugin, AdminForthResource, IAdminForth, Filters, AdminUser} from "adminforth";
 import { PluginOptions } from "./types.js";
 
+type ResourceHooks = NonNullable<AdminForthResource['hooks']>;
+// core fills every hook list of a resource with an array before plugins modify the resource config
+type FilledResourceHooks = { [K in keyof ResourceHooks]-?: Required<NonNullable<ResourceHooks[K]>> };
+
 export default class MarkdownPlugin extends AdminForthPlugin {
   options: PluginOptions;
   resourceConfig!: AdminForthResource;
   adminforth!: IAdminForth;
-  uploadPlugin: AdminForthPlugin;
-  attachmentResource: AdminForthResource = undefined;
+  uploadPlugin?: AdminForthPlugin;
+  attachmentResource!: AdminForthResource;
 
   constructor(options: PluginOptions) {
     super(options, import.meta.url);
@@ -42,7 +46,7 @@ export default class MarkdownPlugin extends AdminForthPlugin {
     }
     const validDataTypes = ['string', 'text', 'richtext'];
 
-    if (!validDataTypes.includes(column.type)) {
+    if (!validDataTypes.includes(column.type!)) {
       throw new Error(`Column ${this.options.fieldName} must be of type 'string', 'text' or 'richtext'.`);
     }
   }
@@ -158,8 +162,11 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       meta: commonMeta,
     };
 
-    const editorRecordPkField = resourceConfig.columns.find(c => c.primaryKey);
-    if (this.options.attachments) {
+    const editorRecordPkField = resourceConfig.columns.find(c => c.primaryKey)!;
+    const attachmentsConfig = this.options.attachments;
+    if (attachmentsConfig) {
+      const attachmentPkName = this.attachmentResource.columns.find(c => c.primaryKey)!.name;
+      const hooks = resourceConfig.hooks as FilledResourceHooks;
 
       type AttachmentMeta = { key: string; alt: string | null; title: string | null };
 
@@ -290,7 +297,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
       const createAttachmentRecords = async (
         adminforth: IAdminForth,
-        options: PluginOptions,
         recordId: any,
         metas: AttachmentMeta[],
         adminUser: AdminUser
@@ -303,16 +309,16 @@ export default class MarkdownPlugin extends AdminForthPlugin {
           await Promise.all(metas.map(async (meta) => {
             try {
               const recordToCreate: any = {
-                [options.attachments.attachmentFieldName]: meta.key,
-                [options.attachments.attachmentRecordIdFieldName]: recordId,
-                [options.attachments.attachmentResourceIdFieldName]: resourceConfig.resourceId,
+                [attachmentsConfig.attachmentFieldName]: meta.key,
+                [attachmentsConfig.attachmentRecordIdFieldName]: recordId,
+                [attachmentsConfig.attachmentResourceIdFieldName]: resourceConfig.resourceId,
               };
 
-              if (options.attachments.attachmentTitleFieldName) {
-                recordToCreate[options.attachments.attachmentTitleFieldName] = meta.title;
+              if (attachmentsConfig.attachmentTitleFieldName) {
+                recordToCreate[attachmentsConfig.attachmentTitleFieldName] = meta.title;
               }
-              if (options.attachments.attachmentAltFieldName) {
-                recordToCreate[options.attachments.attachmentAltFieldName] = meta.alt;
+              if (attachmentsConfig.attachmentAltFieldName) {
+                recordToCreate[attachmentsConfig.attachmentAltFieldName] = meta.alt;
               }
 
               await adminforth.resource(this.attachmentResource.resourceId)
@@ -329,7 +335,6 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
       const deleteAttachmentRecords = async (
         adminforth: IAdminForth,
-        options: PluginOptions,
         recordId: any,
         keys: string[],
         adminUser: AdminUser
@@ -337,27 +342,25 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         if (!keys.length) {
           return;
         }
-        const attachmentPrimaryKeyField = this.attachmentResource.columns.find(c => c.primaryKey);
-        const attachments = await adminforth.resource(options.attachments.attachmentResource).list([
-          Filters.EQ(options.attachments.attachmentRecordIdFieldName, recordId),
-          Filters.EQ(options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId),
-          Filters.IN(options.attachments.attachmentFieldName, keys),
+        const attachments = await adminforth.resource(attachmentsConfig.attachmentResource).list([
+          Filters.EQ(attachmentsConfig.attachmentRecordIdFieldName, recordId),
+          Filters.EQ(attachmentsConfig.attachmentResourceIdFieldName, resourceConfig.resourceId),
+          Filters.IN(attachmentsConfig.attachmentFieldName, keys),
         ]);
 
         await Promise.all(attachments.map(async (a: any) => {
           try {
             await adminforth.resource(this.attachmentResource.resourceId)
               .asSystem({ adminUser, record: a })
-              .delete(a[attachmentPrimaryKeyField.name]);
+              .delete(a[attachmentPkName]);
           } catch (err) {
-            console.error('Error deleting attachment record', a[attachmentPrimaryKeyField.name], err);
+            console.error('Error deleting attachment record', a[attachmentPkName], err);
           }
         }))
       }
 
       const updateAttachmentRecordsMetadata = async (
         adminforth: IAdminForth,
-        options: PluginOptions,
         recordId: any,
         metas: AttachmentMeta[],
         adminUser: AdminUser
@@ -365,33 +368,32 @@ export default class MarkdownPlugin extends AdminForthPlugin {
         if (!metas.length) {
           return;
         }
-        if (!options.attachments.attachmentTitleFieldName && !options.attachments.attachmentAltFieldName) {
+        if (!attachmentsConfig.attachmentTitleFieldName && !attachmentsConfig.attachmentAltFieldName) {
           return;
         }
-        const attachmentPrimaryKeyField = this.attachmentResource.columns.find(c => c.primaryKey);
         const metaByKey = new Map(metas.map(m => [m.key, m] as const));
 
-        const existingAparts = await adminforth.resource(options.attachments.attachmentResource).list([
-          Filters.EQ(options.attachments.attachmentRecordIdFieldName, recordId),
-          Filters.EQ(options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
+        const existingAparts = await adminforth.resource(attachmentsConfig.attachmentResource).list([
+          Filters.EQ(attachmentsConfig.attachmentRecordIdFieldName, recordId),
+          Filters.EQ(attachmentsConfig.attachmentResourceIdFieldName, resourceConfig.resourceId)
         ]);
 
         await Promise.all(existingAparts.map(async (a: any) => {
-          const key = a[options.attachments.attachmentFieldName];
+          const key = a[attachmentsConfig.attachmentFieldName];
           const meta = metaByKey.get(key);
           if (!meta) {
             return;
           }
 
           const patch: any = {};
-          if (options.attachments.attachmentTitleFieldName) {
-            const field = options.attachments.attachmentTitleFieldName;
+          if (attachmentsConfig.attachmentTitleFieldName) {
+            const field = attachmentsConfig.attachmentTitleFieldName;
             if ((a[field] ?? null) !== (meta.title ?? null)) {
               patch[field] = meta.title;
             }
           }
-          if (options.attachments.attachmentAltFieldName) {
-            const field = options.attachments.attachmentAltFieldName;
+          if (attachmentsConfig.attachmentAltFieldName) {
+            const field = attachmentsConfig.attachmentAltFieldName;
             if ((a[field] ?? null) !== (meta.alt ?? null)) {
               patch[field] = meta.alt;
             }
@@ -402,25 +404,25 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
           await adminforth.resource(this.attachmentResource.resourceId)
             .asSystem({ adminUser, oldRecord: a })
-            .update(a[attachmentPrimaryKeyField.name], patch);
+            .update(a[attachmentPkName], patch);
         }));
       }
       
-      (resourceConfig.hooks.create.afterSave).push(async ({ record, adminUser }: { record: any, adminUser: AdminUser }) => {
+      hooks.create.afterSave.push(async ({ record, adminUser }: { record: any, adminUser: AdminUser }) => {
         // find all s3Paths in the html
         const metas = await getAttachmentMetas(record[this.options.fieldName]);
         const keys = metas.map(m => m.key);
         process.env.HEAVY_DEBUG && console.log('📸 Found attachment keys', keys);
         // create attachment records
         await createAttachmentRecords(
-          adminforth, this.options, record[editorRecordPkField.name], metas, adminUser);
+          adminforth, record[editorRecordPkField.name], metas, adminUser);
 
         return { ok: true };
       });
 
       // after edit we need to delete attachments that are not in the html anymore
       // and add new ones
-      (resourceConfig.hooks.edit.afterSave).push(
+      hooks.edit.afterSave.push(
         async ({ recordId, updates, adminUser }: { recordId: any, updates: any, adminUser: AdminUser }) => {
           process.env.HEAVY_DEBUG && console.log('⚓ Cought hook', recordId, 'updates', updates);
           if (updates[this.options.fieldName] === undefined) {
@@ -428,11 +430,11 @@ export default class MarkdownPlugin extends AdminForthPlugin {
             // field was not changed, do nothing
             return { ok: true };
           }
-          const existingAparts = await adminforth.resource(this.options.attachments.attachmentResource).list([
-            Filters.EQ(this.options.attachments.attachmentRecordIdFieldName, recordId),
-            Filters.EQ(this.options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
+          const existingAparts = await adminforth.resource(attachmentsConfig.attachmentResource).list([
+            Filters.EQ(attachmentsConfig.attachmentRecordIdFieldName, recordId),
+            Filters.EQ(attachmentsConfig.attachmentResourceIdFieldName, resourceConfig.resourceId)
           ]);
-          const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
+          const existingKeys = existingAparts.map((a: any) => a[attachmentsConfig.attachmentFieldName]);
 
           const metas = await getAttachmentMetas(updates[this.options.fieldName]);
           const newKeys = metas.map(m => m.key);
@@ -448,12 +450,12 @@ export default class MarkdownPlugin extends AdminForthPlugin {
 
           const metasToAdd = metas.filter(m => toAdd.includes(m.key));
           await Promise.all([
-            deleteAttachmentRecords(adminforth, this.options, recordId, toDelete, adminUser),
-            createAttachmentRecords(adminforth, this.options, recordId, metasToAdd, adminUser)
+            deleteAttachmentRecords(adminforth, recordId, toDelete, adminUser),
+            createAttachmentRecords(adminforth, recordId, metasToAdd, adminUser)
           ]);
 
           // Keep alt/title in sync for existing attachments too
-          await updateAttachmentRecordsMetadata(adminforth, this.options, recordId, metas, adminUser);
+          await updateAttachmentRecordsMetadata(adminforth, recordId, metas, adminUser);
 
           return { ok: true };
 
@@ -461,17 +463,17 @@ export default class MarkdownPlugin extends AdminForthPlugin {
       );
 
       // after delete we need to delete all attachments
-      (resourceConfig.hooks.delete.afterSave).push(
+      hooks.delete.afterSave.push(
         async ({ record, adminUser }: { record: any, adminUser: AdminUser }) => {
-          const existingAparts = await adminforth.resource(this.options.attachments.attachmentResource).list(
+          const existingAparts = await adminforth.resource(attachmentsConfig.attachmentResource).list(
             [
-              Filters.EQ(this.options.attachments.attachmentRecordIdFieldName, record[editorRecordPkField.name]),
-              Filters.EQ(this.options.attachments.attachmentResourceIdFieldName, resourceConfig.resourceId)
+              Filters.EQ(attachmentsConfig.attachmentRecordIdFieldName, record[editorRecordPkField.name]),
+              Filters.EQ(attachmentsConfig.attachmentResourceIdFieldName, resourceConfig.resourceId)
             ]
           );
-          const existingKeys = existingAparts.map((a: any) => a[this.options.attachments.attachmentFieldName]);
+          const existingKeys = existingAparts.map((a: any) => a[attachmentsConfig.attachmentFieldName]);
           process.env.HEAVY_DEBUG && console.log('📸 Found keys to delete', existingKeys);
-          await deleteAttachmentRecords(adminforth, this.options, record[editorRecordPkField.name], existingKeys, adminUser);
+          await deleteAttachmentRecords(adminforth, record[editorRecordPkField.name], existingKeys, adminUser);
 
           return { ok: true };
         }
